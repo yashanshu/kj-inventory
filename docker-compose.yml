@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  inventory-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - DATABASE_DRIVER=sqlite3
+      - DATABASE_URL=/app/data/inventory.db
+      - JWT_SECRET=your-secret-key-change-in-production
+      - LOG_LEVEL=info
+      - SERVE_STATIC=true
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: PostgreSQL for production deployment
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=inventory
+      - POSTGRES_USER=inventory_user
+      - POSTGRES_PASSWORD=change_this_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+# Makefile
+.PHONY: help dev build test clean docker deploy migrate
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}'
+
+dev: ## Start development servers (backend + frontend)
+	@echo "Starting development environment..."
+	@make -j2 dev-backend dev-frontend
+
+dev-backend: ## Start Go backend in development mode
+	cd backend && go run cmd/server/main.go
+
+dev-frontend: ## Start React frontend in development mode
+	cd frontend && npm run dev
+
+build: ## Build production binaries
+	@echo "Building backend..."
+	cd backend && CGO_ENABLED=1 go build -ldflags="-s -w" -o ../dist/inventory-server cmd/server/main.go
+	@echo "Building frontend..."
+	cd frontend && npm run build && cp -r dist ../dist/frontend
+	@echo "Build complete! Files in ./dist/"
+
+build-backend: ## Build only backend binary
+	cd backend && CGO_ENABLED=1 go build -ldflags="-s -w" -o ../dist/inventory-server cmd/server/main.go
+
+build-frontend: ## Build only frontend
+	cd frontend && npm run build
+
+test: ## Run all tests
+	@echo "Running backend tests..."
+	cd backend && go test ./...
+	@echo "Running frontend tests..."
+	cd frontend && npm test
+
+test-backend: ## Run backend tests only
+	cd backend && go test ./...
+
+test-frontend: ## Run frontend tests only
+	cd frontend && npm test
+
+migrate: ## Run database migrations
+	cd backend && go run cmd/migrate/main.go
+
+migrate-down: ## Rollback database migrations
+	cd backend && go run cmd/migrate/main.go -down
+
+clean: ## Clean build artifacts
+	rm -rf dist/
+	rm -rf backend/inventory-server
+	rm -rf frontend/dist
+	rm -rf frontend/node_modules/.cache
+
+docker: ## Build Docker image
+	docker build -t inventory-management:latest .
+
+docker-compose: ## Start with docker-compose
+	docker-compose up -d
+
+docker-logs: ## View docker-compose logs
+	docker-compose logs -f
+
+docker-stop: ## Stop docker-compose services
+	docker-compose down
+
+install: ## Install dependencies
+	@echo "Installing backend dependencies..."
+	cd backend && go mod download
+	@echo "Installing frontend dependencies..."
+	cd frontend && npm install
+
+setup: install ## Setup development environment
+	@echo "Setting up development environment..."
+	@if [ ! -f .env ]; then cp .env.example .env; fi
+	@echo "Running initial migration..."
+	@make migrate
+	@echo "Setup complete!"
+
+deploy-binary: build ## Deploy as standalone binary
+	@echo "Deploying standalone binary..."
+	@echo "1. Copy ./dist/inventory-server to your server"
+	@echo "2. Copy ./dist/frontend to your server"
+	@echo "3. Set environment variables (see .env.example)"
+	@echo "4. Run: ./inventory-server"
+
+deploy-docker: docker ## Deploy with Docker
+	@echo "Deploying with Docker..."
+	docker save inventory-management:latest | gzip > inventory-management.tar.gz
+	@echo "Upload inventory-management.tar.gz to your server and run:"
+	@echo "docker load < inventory-management.tar.gz"
+	@echo "docker run -d -p 8080:8080 -v ./data:/app/data inventory-management:latest"
+
+lint: ## Run linters
+	cd backend && golangci-lint run
+	cd frontend && npm run lint
+
+format: ## Format code
+	cd backend && go fmt ./...
+	cd frontend && npm run format
+
+security-check: ## Run security checks
+	cd backend && gosec ./...
+	cd frontend && npm audit
+
+size-check: ## Check binary/image sizes
+	@echo "Backend binary size:"
+	@ls -lh dist/inventory-server 2>/dev/null || echo "Binary not built"
+	@echo "Frontend build size:"
+	@du -sh frontend/dist 2>/dev/null || echo "Frontend not built"
+	@echo "Docker image size:"
+	@docker images inventory-management:latest --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" 2>/dev/null || echo "Docker image not built"
