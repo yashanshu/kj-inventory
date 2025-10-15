@@ -1,33 +1,37 @@
-# Restaurant Inventory Management System
+# KJ Inventory Management System
 
-A modern, mobile-first inventory management system built for small restaurant operations. Features real-time stock tracking, low-stock alerts, and intuitive mobile interface for quick inventory updates.
+A modern inventory management system built with Go backend and React frontend.
 
 ## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### Prerequisites
+
+- Go 1.20+
+- Node.js 18+ (for frontend, coming soon)
+- Make
+
+### Setup & Run
+
+1. **Run Database Migrations**
+   ```bash
+   make migrate-up
+   ```
+   This creates the SQLite database and seeds it with sample data including:
+   - Default organization
+   - Admin user (email: `admin@restaurant.local`, password: `admin123`)
+   - 5 categories (Dry Items, Dry Consumables, Deep Cold/Frozen, Perishable Cold, Packaging)
+   - 45 sample inventory items
+
+2. **Build and Run the Server**
+   ```bash
+   make run
+   ```
+   Server will start on `http://localhost:8080`
+
+### Daily Development
+
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd inventory-management
-
-# Start with Docker Compose
-make docker-compose
-
-# Access the application
-open http://localhost:8080
-```
-
-### Standalone Binary
-```bash
-# Build the application
-make build
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
-
-# Run the server
-./dist/inventory-server
+make dev  # Run server in development mode (go run)
 ```
 
 ## 📱 Features
@@ -65,81 +69,160 @@ cp .env.example .env
 - **Perishable Cold**: Fresh items requiring refrigeration
 - **Packaging**: Containers, bags, packaging materials
 
+## 🗄️ Database Migrations
+
+The project uses [golang-migrate](https://github.com/golang-migrate/migrate) for database schema management.
+
+### Migration Commands
+
+```bash
+# Run all pending migrations
+make migrate-up
+
+# Rollback the last migration
+make migrate-down
+
+# Rollback all migrations
+make migrate-down-all
+
+# Check current migration version
+make migrate-version
+
+# Create a new migration
+make migrate-create NAME=add_some_feature
+
+# Force set migration version (use with caution!)
+make migrate-force VERSION=1
+```
+
+### Manual Migration (without Make)
+
+If you prefer to use the migrate CLI directly:
+
+```bash
+# Install migrate CLI
+go install -tags 'sqlite3' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+# Run migrations
+migrate -path backend/migrations/sqlite -database "sqlite3://./data/inventory.db?_fk=1" up
+
+# Rollback
+migrate -path backend/migrations/sqlite -database "sqlite3://./data/inventory.db?_fk=1" down 1
+```
+
 ## 🔧 Development
 
 ```bash
-# Setup development environment
-make setup
-
-# Start development servers
-make dev
+# Clean and start fresh
+make clean
+make migrate-up
+make run
 
 # Run tests
 make test
 
-# Check code quality
-make lint
-make security-check
+# Build for production
+make build
 ```
 
-## 📦 Deployment Options
+## 📁 Project Structure
 
-### 1. Docker Deployment
-```bash
-make docker
-docker run -p 8080:8080 -v ./data:/app/data inventory-management:latest
+```
+kj-inventory/
+├── backend/
+│   ├── cmd/server/          # Application entry point
+│   ├── internal/
+│   │   ├── config/          # Configuration management
+│   │   ├── database/        # Database connection
+│   │   ├── domain/          # Domain models (Item, User, Category, Movement, Alert)
+│   │   ├── repository/      # Data access layer (CRUD operations)
+│   │   ├── services/        # Business logic (TODO)
+│   │   ├── handlers/        # HTTP handlers (TODO)
+│   │   └── middleware/      # HTTP middleware (auth, logging)
+│   ├── migrations/sqlite/   # Database migrations
+│   │   ├── 000001_initial_schema.up.sql
+│   │   └── 000001_initial_schema.down.sql
+│   └── pkg/                 # Shared packages (logger, utils)
+├── frontend/                # React frontend (TODO)
+├── data/                    # SQLite database location
+├── Makefile                 # Build and migration commands
+└── README.md
 ```
 
-### 2. Binary Deployment
-```bash
-make deploy-binary
-# Follow the printed instructions
-```
+## 🔑 Default Credentials
 
-### 3. Remote Server Deployment
-```bash
-./scripts/deploy.sh your-server.com username /opt/inventory
-```
+**Admin User:**
+- Email: `admin@restaurant.local`
+- Password: `admin123` (⚠️ **Change in production!**)
 
-## 🔒 Security
-
-- JWT-based authentication
-- CORS protection
-- Input validation on all endpoints
-- SQL injection protection via prepared statements
-- Rate limiting (configurable)
-
-## 📈 Performance
-
-- **Memory**: ~20-30MB runtime (Docker)
-- **Database**: Optimized indexes for fast queries
-- **Frontend**: Code splitting and lazy loading
-- **Caching**: Redis support for session storage
-
-## 🔧 Configuration
-
-Key environment variables:
+## 🛠️ Available Make Commands
 
 ```bash
-# Database
-DATABASE_DRIVER=sqlite3  # or postgres
-DATABASE_URL=./inventory.db
+make help          # Show all available commands
+make build         # Build the backend binary
+make run           # Build and run the server
+make dev           # Run server in dev mode (go run)
+make test          # Run backend tests
+make clean         # Clean build artifacts and database
 
-# Security  
-JWT_SECRET=your-secret-key
-
-# Server
-SERVER_PORT=8080
-LOG_LEVEL=info
+# Migration commands
+make migrate-up           # Apply all pending migrations
+make migrate-down         # Rollback last migration
+make migrate-down-all     # Rollback all migrations
+make migrate-version      # Show current migration version
+make migrate-create       # Create new migration (NAME=xxx)
 ```
 
-## 🤝 Contributing
+## 📊 Current Status - Steps 1 & 2 Complete ✅
 
-1. Follow TDD practices
-2. Use conventional commits
-3. Test mobile responsiveness
-4. Update documentation
+### ✅ Completed (Backend Foundation)
+- [x] Database schema with triggers and indexes
+- [x] Migration system using golang-migrate (CLI-based)
+- [x] Domain models (Item, User, Category, Movement, Alert)
+- [x] Repository layer with all CRUD operations:
+  - ItemRepository (with tests)
+  - UserRepository
+  - CategoryRepository
+  - MovementRepository
+  - AlertRepository
+- [x] Database connection with proper configuration
+- [x] Sample data seeding (45 items, 5 categories, 1 admin user)
+- [x] Build and migration tooling (Makefile)
+
+### 🚧 Next Steps (TODO)
+- [ ] Service layer (auth, inventory, dashboard)
+- [ ] HTTP handlers
+- [ ] JWT authentication middleware implementation
+- [ ] API endpoint implementation
+- [ ] Frontend development
+- [ ] End-to-end testing
+
+## 🎯 API Endpoints (Planned)
+
+### Authentication
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/register` - Register new user (admin only)
+
+### Items
+- `GET /api/v1/items` - List items (with filters)
+- `POST /api/v1/items` - Create item
+- `GET /api/v1/items/{id}` - Get item details
+- `PUT /api/v1/items/{id}` - Update item
+- `DELETE /api/v1/items/{id}` - Delete item
+
+### Stock Movements
+- `POST /api/v1/movements` - Create stock movement (IN/OUT/ADJUSTMENT)
+- `GET /api/v1/movements` - List movements
+- `GET /api/v1/items/{id}/movements` - Get item movement history
+
+### Categories
+- `GET /api/v1/categories` - List categories
+- `POST /api/v1/categories` - Create category
+
+### Dashboard
+- `GET /api/v1/dashboard/metrics` - Get dashboard metrics (low stock, out of stock, etc.)
+- `GET /api/v1/dashboard/charts` - Get chart data
 
 ## 📄 License
 
-MIT License - see LICENSE file for details.
+Private project - All rights reserved

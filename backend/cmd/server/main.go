@@ -10,8 +10,10 @@ import (
 
 	"hasufel.kj/internal/config"
 	"hasufel.kj/internal/database"
-
+	"hasufel.kj/internal/handlers"
 	"hasufel.kj/internal/middleware"
+	"hasufel.kj/internal/repository"
+	"hasufel.kj/internal/services"
 	"hasufel.kj/pkg/logger"
 
 	"github.com/go-chi/chi/v5"
@@ -33,27 +35,25 @@ func main() {
 	}
 	defer db.Close()
 
-	//// Run migrations
-	//if err := database.RunMigrations(cfg.Database); err != nil {
-	//	log.Fatal("Failed to run migrations", err)
-	//}
+	log.Info("Database connection established")
 
 	// Initialize repositories
-	//itemRepo := repository.NewItemRepository(db)
-	//categoryRepo := repository.NewCategoryRepository(db)
-	//movementRepo := repository.NewMovementRepository(db)
-	//userRepo := repository.NewUserRepository(db)
+	itemRepo := repository.NewItemRepository(db)
+	categoryRepo := repository.NewCategoryRepository(db)
+	movementRepo := repository.NewMovementRepository(db)
+	alertRepo := repository.NewAlertRepository(db)
+	userRepo := repository.NewUserRepository(db)
 
 	// Initialize services
-	//authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
-	//inventoryService := services.NewInventoryService(itemRepo, categoryRepo, movementRepo)
-	//dashboardService := services.NewDashboardService(itemRepo, movementRepo)
+	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
+	inventoryService := services.NewInventoryService(itemRepo, categoryRepo, movementRepo, alertRepo, db)
+	dashboardService := services.NewDashboardService(itemRepo, movementRepo, alertRepo, db)
 
 	// Initialize handlers
-	//authHandler := handlers.NewAuthHandler(authService, log)
-	//inventoryHandler := handlers.NewInventoryHandler(inventoryService, log)
-	//dashboardHandler := handlers.NewDashboardHandler(dashboardService, log)
-	//movementHandler := handlers.NewMovementHandler(inventoryService, log)
+	authHandler := handlers.NewAuthHandler(authService, log)
+	inventoryHandler := handlers.NewInventoryHandler(inventoryService, log)
+	dashboardHandler := handlers.NewDashboardHandler(dashboardService, log)
+	movementHandler := handlers.NewMovementHandler(inventoryService, log)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -81,48 +81,52 @@ func main() {
 		r.Handle("/*", fileServer)
 	}
 
+	// Health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public routes
-		//r.Post("/auth/login", authHandler.Login)
-		//r.Post("/auth/register", authHandler.Register)
+		r.Post("/auth/login", authHandler.Login)
+		r.Post("/auth/register", authHandler.Register)
 
 		// Protected routes
-		//r.Group(func(r chi.Router) {
-		//	r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
 
-		//	// Dashboard
-		//	r.Get("/dashboard/metrics", dashboardHandler.GetMetrics)
-		//	r.Get("/dashboard/charts", dashboardHandler.GetCharts)
+			// User profile
+			r.Get("/auth/profile", authHandler.GetProfile)
+			r.Post("/auth/change-password", authHandler.ChangePassword)
 
-		//	// Categories
-		//	r.Get("/categories", inventoryHandler.GetCategories)
-		//	r.Post("/categories", inventoryHandler.CreateCategory)
+			// Dashboard
+			r.Get("/dashboard/metrics", dashboardHandler.GetMetrics)
+			r.Get("/dashboard/recent-movements", dashboardHandler.GetRecentMovements)
+			r.Get("/dashboard/stock-trends", dashboardHandler.GetStockTrends)
+			r.Get("/dashboard/category-breakdown", dashboardHandler.GetCategoryBreakdown)
+			r.Get("/dashboard/low-stock", dashboardHandler.GetLowStockItems)
+			r.Get("/dashboard/alerts", dashboardHandler.GetAlerts)
 
-		//	// Items
-		//	r.Get("/items", inventoryHandler.GetItems)
-		//	r.Post("/items", inventoryHandler.CreateItem)
-		//	r.Get("/items/{id}", inventoryHandler.GetItem)
-		//	r.Put("/items/{id}", inventoryHandler.UpdateItem)
-		//	r.Delete("/items/{id}", inventoryHandler.DeleteItem)
+			// Categories
+			r.Get("/categories", inventoryHandler.GetCategories)
+			r.Post("/categories", inventoryHandler.CreateCategory)
 
-		//	// Stock movements
-		//	r.Post("/movements", movementHandler.CreateMovement)
-		//	r.Get("/movements", movementHandler.GetMovements)
-		//	r.Get("/items/{id}/movements", movementHandler.GetItemMovements)
+			// Items
+			r.Get("/items", inventoryHandler.GetItems)
+			r.Post("/items", inventoryHandler.CreateItem)
+			r.Get("/items/{id}", inventoryHandler.GetItem)
+			r.Put("/items/{id}", inventoryHandler.UpdateItem)
+			r.Delete("/items/{id}", inventoryHandler.DeleteItem)
 
-		//	// Bulk operations
-		//	r.Post("/items/bulk-import", inventoryHandler.BulkImport)
-		//	r.Post("/movements/bulk-adjust", movementHandler.BulkAdjust)
-		//})
+			// Stock movements
+			r.Post("/movements", movementHandler.CreateMovement)
+			r.Get("/movements", movementHandler.GetMovements)
+			r.Get("/items/{id}/movements", movementHandler.GetItemMovements)
+		})
 	})
-
-	// Health check
-	//r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-	//	w.Header().Set("Content-Type", "application/json")
-	//	w.WriteHeader(http.StatusOK)
-	//	w.Write([]byte(`{"status":"ok"}`))
-	//})
 
 	// Start server
 	srv := &http.Server{

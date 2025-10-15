@@ -15,14 +15,16 @@ const (
 )
 
 type StockMovement struct {
-	ID           uuid.UUID    `json:"id" db:"id"`
-	ItemID       uuid.UUID    `json:"item_id" db:"item_id"`
-	MovementType MovementType `json:"movement_type" db:"movement_type" validate:"required"`
-	Quantity     int          `json:"quantity" db:"quantity" validate:"required"`
-	Reference    *string      `json:"reference" db:"reference"`
-	Notes        *string      `json:"notes" db:"notes"`
-	CreatedBy    uuid.UUID    `json:"created_by" db:"created_by"`
-	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
+	ID            uuid.UUID    `json:"id" db:"id"`
+	ItemID        uuid.UUID    `json:"item_id" db:"item_id"`
+	MovementType  MovementType `json:"movement_type" db:"movement_type" validate:"required"`
+	Quantity      int          `json:"quantity" db:"quantity" validate:"required"`
+	PreviousStock int          `json:"previous_stock" db:"previous_stock"`
+	NewStock      int          `json:"new_stock" db:"new_stock"`
+	Reference     *string      `json:"reference" db:"reference"`
+	Notes         *string      `json:"notes" db:"notes"`
+	CreatedBy     uuid.UUID    `json:"created_by" db:"created_by"`
+	CreatedAt     time.Time    `json:"created_at" db:"created_at"`
 
 	// Joined fields
 	Item *Item `json:"item,omitempty"`

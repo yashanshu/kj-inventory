@@ -35,6 +35,8 @@ go.work
 .task/
 backend/.env
 build/*
+bin/*
+backend/data/inventory.db
 
 node_modules
 *.log*

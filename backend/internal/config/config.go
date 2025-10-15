@@ -114,7 +114,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		Server: ServerCfg{
-			Port: "8080", ReadTimeout: 15, WriteTimeout: 15,
+			Port: "8800", ReadTimeout: 15, WriteTimeout: 15,
 		},
 		Database: DBCfg{
 			Driver: "sqlite",

@@ -128,10 +128,34 @@ func (r *itemRepoSQLite) List(ctx context.Context, orgID uuid.UUID, limit, offse
 	return items, rows.Err()
 }
 
+func (r *itemRepoSQLite) Update(ctx context.Context, item *domain.Item) error {
+	item.UpdatedAt = time.Now().UTC()
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE items SET
+			name = ?, sku = ?, unit_of_measurement = ?,
+			minimum_threshold = ?, current_stock = ?,
+			unit_cost = ?, is_active = ?, updated_at = ?
+		WHERE id = ?
+	`,
+		item.Name, item.SKU, item.UnitOfMeasurement,
+		item.MinimumThreshold, item.CurrentStock,
+		item.UnitCost, item.IsActive, item.UpdatedAt,
+		item.ID.String(),
+	)
+	return err
+}
+
 func (r *itemRepoSQLite) UpdateStock(ctx context.Context, id uuid.UUID, newStock int) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE items SET current_stock = ?, updated_at = ?
 		WHERE id = ?
 	`, newStock, time.Now().UTC(), id.String())
+	return err
+}
+
+func (r *itemRepoSQLite) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `
+		DELETE FROM items WHERE id = ?
+	`, id.String())
 	return err
 }
