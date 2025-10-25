@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -36,14 +37,14 @@ type LoginResponse struct {
 type RegisterRequest struct {
 	Email          string `json:"email" validate:"required,email"`
 	Password       string `json:"password" validate:"required,min=8"`
-	FirstName      string `json:"first_name" validate:"required"`
-	LastName       string `json:"last_name" validate:"required"`
-	OrganizationID string `json:"organization_id" validate:"required,uuid"`
+	FirstName      string `json:"firstName" validate:"required"`
+	LastName       string `json:"lastName" validate:"required"`
+	OrganizationID string `json:"organizationId" validate:"required,uuid"`
 }
 
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" validate:"required"`
-	NewPassword string `json:"new_password" validate:"required,min=8"`
+	OldPassword string `json:"oldPassword" validate:"required"`
+	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
 // Login handles user login
@@ -84,6 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgID, err := uuid.Parse(req.OrganizationID)
+	fmt.Println(orgID)
 	if err != nil {
 		utils.RespondError(w, http.StatusBadRequest, "INVALID_ORG_ID", "Invalid organization ID", nil)
 		return

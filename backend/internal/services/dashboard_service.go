@@ -10,17 +10,17 @@ import (
 )
 
 type DashboardMetrics struct {
-	TotalItems         int     `json:"total_items"`
-	TotalValue         float64 `json:"total_value"`
-	LowStockItems      int     `json:"low_stock_items"`
-	OutOfStockItems    int     `json:"out_of_stock_items"`
-	RecentMovementsCount int   `json:"recent_movements_count"`
+	TotalItems           int     `json:"total_items"`
+	TotalValue           float64 `json:"total_value"`
+	LowStockItems        int     `json:"low_stock_items"`
+	OutOfStockItems      int     `json:"out_of_stock_items"`
+	RecentMovementsCount int     `json:"recent_movements_count"`
 }
 
 type StockTrend struct {
-	Date  string `json:"date"`
-	In    int    `json:"in"`
-	Out   int    `json:"out"`
+	Date string `json:"date"`
+	In   int    `json:"in"`
+	Out  int    `json:"out"`
 }
 
 type CategoryBreakdown struct {
@@ -60,8 +60,8 @@ func (s *DashboardService) GetMetrics(ctx context.Context, orgID uuid.UUID) (*Da
 		SELECT
 			COUNT(*) as total_items,
 			COALESCE(SUM(current_stock * COALESCE(unit_cost, 0)), 0) as total_value,
-			SUM(CASE WHEN current_stock < minimum_threshold AND current_stock > 0 THEN 1 ELSE 0 END) as low_stock,
-			SUM(CASE WHEN current_stock = 0 THEN 1 ELSE 0 END) as out_of_stock
+			SUM(CASE WHEN track_stock = 1 AND current_stock < minimum_threshold AND current_stock > 0 THEN 1 ELSE 0 END) as low_stock,
+			SUM(CASE WHEN track_stock = 1 AND current_stock = 0 THEN 1 ELSE 0 END) as out_of_stock
 		FROM items
 		WHERE organization_id = ? AND is_active = 1
 	`
@@ -170,10 +170,11 @@ func (s *DashboardService) GetCategoryBreakdown(ctx context.Context, orgID uuid.
 func (s *DashboardService) GetLowStockItems(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.Item, error) {
 	query := `
 		SELECT id, organization_id, category_id, name, sku, unit_of_measurement,
-		       minimum_threshold, current_stock, unit_cost, is_active, created_at, updated_at
+		       minimum_threshold, current_stock, unit_cost, is_active, track_stock, created_at, updated_at
 		FROM items
 		WHERE organization_id = ?
 		AND is_active = 1
+		AND track_stock = 1
 		AND current_stock < minimum_threshold
 		AND current_stock > 0
 		ORDER BY (minimum_threshold - current_stock) DESC
@@ -193,7 +194,7 @@ func (s *DashboardService) GetLowStockItems(ctx context.Context, orgID uuid.UUID
 		if err := rows.Scan(
 			&idStr, &orgIDStr, &catIDStr, &item.Name, &item.SKU, &item.UnitOfMeasurement,
 			&item.MinimumThreshold, &item.CurrentStock, &item.UnitCost, &item.IsActive,
-			&item.CreatedAt, &item.UpdatedAt,
+			&item.TrackStock, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

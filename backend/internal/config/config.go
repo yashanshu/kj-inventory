@@ -118,7 +118,7 @@ func Load() Config {
 		},
 		Database: DBCfg{
 			Driver: "sqlite",
-			DSN:    "file:./data/inventory.db?_fk=1",
+			DSN:    "file:./backend/data/inventory.db?_fk=1",
 		},
 		JWT:         JWTCfg{Secret: "change-me"},
 		CORS:        CORS{AllowedOrigins: []string{"http://localhost:5173"}},

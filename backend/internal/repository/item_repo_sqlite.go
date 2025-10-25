@@ -34,12 +34,12 @@ func (r *itemRepoSQLite) Create(ctx context.Context, item *domain.Item) (uuid.UU
 		INSERT INTO items (
 			id, organization_id, category_id, name, sku,
 			unit_of_measurement, minimum_threshold, current_stock,
-			unit_cost, is_active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			unit_cost, is_active, track_stock, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		item.ID.String(), item.OrganizationID.String(), item.CategoryID.String(),
 		item.Name, item.SKU, item.UnitOfMeasurement, item.MinimumThreshold,
-		item.CurrentStock, item.UnitCost, item.IsActive, item.CreatedAt, item.UpdatedAt,
+		item.CurrentStock, item.UnitCost, item.IsActive, item.TrackStock, item.CreatedAt, item.UpdatedAt,
 	)
 	if err != nil {
 		return uuid.Nil, err
@@ -51,8 +51,8 @@ func (r *itemRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ite
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, organization_id, category_id, name, sku,
 		       unit_of_measurement, minimum_threshold, current_stock,
-		       unit_cost, is_active, created_at, updated_at
-		FROM items WHERE id = ?
+		       unit_cost, is_active, track_stock, created_at, updated_at
+	FROM items WHERE id = ?
 	`, id.String())
 
 	var it domain.Item
@@ -63,7 +63,7 @@ func (r *itemRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ite
 	)
 	if err := row.Scan(&idStr, &orgStr, &catStr, &it.Name, &sku,
 		&it.UnitOfMeasurement, &it.MinimumThreshold, &it.CurrentStock,
-		&unitCost, &it.IsActive, &it.CreatedAt, &it.UpdatedAt,
+		&unitCost, &it.IsActive, &it.TrackStock, &it.CreatedAt, &it.UpdatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -88,7 +88,7 @@ func (r *itemRepoSQLite) List(ctx context.Context, orgID uuid.UUID, limit, offse
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, organization_id, category_id, name, sku,
 		       unit_of_measurement, minimum_threshold, current_stock,
-		       unit_cost, is_active, created_at, updated_at
+		       unit_cost, is_active, track_stock, created_at, updated_at
 		FROM items
 		WHERE organization_id = ?
 		ORDER BY created_at DESC
@@ -109,7 +109,73 @@ func (r *itemRepoSQLite) List(ctx context.Context, orgID uuid.UUID, limit, offse
 		)
 		if err := rows.Scan(&idStr, &orgStr, &catStr, &it.Name, &sku,
 			&it.UnitOfMeasurement, &it.MinimumThreshold, &it.CurrentStock,
-			&unitCost, &it.IsActive, &it.CreatedAt, &it.UpdatedAt,
+			&unitCost, &it.IsActive, &it.TrackStock, &it.CreatedAt, &it.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		it.ID, _ = uuid.Parse(idStr)
+		it.OrganizationID, _ = uuid.Parse(orgStr)
+		it.CategoryID, _ = uuid.Parse(catStr)
+		if sku.Valid {
+			it.SKU = &sku.String
+		}
+		if unitCost.Valid {
+			it.UnitCost = &unitCost.Float64
+		}
+		items = append(items, &it)
+	}
+
+	return items, rows.Err()
+}
+
+func (r *itemRepoSQLite) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+	query := `
+		SELECT id, organization_id, category_id, name, sku,
+		       unit_of_measurement, minimum_threshold, current_stock,
+		       unit_cost, is_active, track_stock, created_at, updated_at
+		FROM items
+		WHERE organization_id = ?`
+
+	args := []interface{}{orgID.String()}
+
+	// Add search filter
+	if search != "" {
+		query += ` AND (name LIKE ? OR sku LIKE ?)`
+		searchPattern := "%" + search + "%"
+		args = append(args, searchPattern, searchPattern)
+	}
+
+	// Add category filter
+	if categoryID != nil {
+		query += ` AND category_id = ?`
+		args = append(args, categoryID.String())
+	}
+
+	// Add low stock filter
+	if lowStockOnly {
+		query += ` AND track_stock = 1 AND current_stock <= minimum_threshold`
+	}
+
+	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*domain.Item
+	for rows.Next() {
+		var it domain.Item
+		var (
+			idStr, orgStr, catStr string
+			sku                   sql.NullString
+			unitCost              sql.NullFloat64
+		)
+		if err := rows.Scan(&idStr, &orgStr, &catStr, &it.Name, &sku,
+			&it.UnitOfMeasurement, &it.MinimumThreshold, &it.CurrentStock,
+			&unitCost, &it.IsActive, &it.TrackStock, &it.CreatedAt, &it.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -134,12 +200,12 @@ func (r *itemRepoSQLite) Update(ctx context.Context, item *domain.Item) error {
 		UPDATE items SET
 			name = ?, sku = ?, unit_of_measurement = ?,
 			minimum_threshold = ?, current_stock = ?,
-			unit_cost = ?, is_active = ?, updated_at = ?
+			unit_cost = ?, is_active = ?, track_stock = ?, category_id = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		item.Name, item.SKU, item.UnitOfMeasurement,
 		item.MinimumThreshold, item.CurrentStock,
-		item.UnitCost, item.IsActive, item.UpdatedAt,
+		item.UnitCost, item.IsActive, item.TrackStock, item.CategoryID.String(), item.UpdatedAt,
 		item.ID.String(),
 	)
 	return err
@@ -150,6 +216,27 @@ func (r *itemRepoSQLite) UpdateStock(ctx context.Context, id uuid.UUID, newStock
 		UPDATE items SET current_stock = ?, updated_at = ?
 		WHERE id = ?
 	`, newStock, time.Now().UTC(), id.String())
+	return err
+}
+
+func (r *itemRepoSQLite) CountByCategory(ctx context.Context, categoryID uuid.UUID) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM items WHERE category_id = ?
+	`, categoryID.String())
+
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *itemRepoSQLite) ReassignCategory(ctx context.Context, fromCategoryID, toCategoryID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE items
+		SET category_id = ?, updated_at = ?
+		WHERE category_id = ?
+	`, toCategoryID.String(), time.Now().UTC(), fromCategoryID.String())
 	return err
 }
 

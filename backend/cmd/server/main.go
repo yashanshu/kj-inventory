@@ -113,6 +113,8 @@ func main() {
 			// Categories
 			r.Get("/categories", inventoryHandler.GetCategories)
 			r.Post("/categories", inventoryHandler.CreateCategory)
+			r.Put("/categories/{id}", inventoryHandler.UpdateCategory)
+			r.Delete("/categories/{id}", inventoryHandler.DeleteCategory)
 
 			// Items
 			r.Get("/items", inventoryHandler.GetItems)

@@ -112,11 +112,11 @@ func TestAuthHandler_Register(t *testing.T) {
 				if user["email"] != "test@example.com" {
 					t.Errorf("expected email test@example.com, got %v", user["email"])
 				}
-				if user["first_name"] != "John" {
-					t.Errorf("expected first_name John, got %v", user["first_name"])
+				if user["firstName"] != "John" {
+					t.Errorf("expected firstName John, got %v", user["firstName"])
 				}
-				if user["last_name"] != "Doe" {
-					t.Errorf("expected last_name Doe, got %v", user["last_name"])
+				if user["lastName"] != "Doe" {
+					t.Errorf("expected lastName Doe, got %v", user["lastName"])
 				}
 			},
 		},

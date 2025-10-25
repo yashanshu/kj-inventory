@@ -29,10 +29,11 @@ func openInMemoryDB(t *testing.T) *sql.DB {
 		unit_of_measurement TEXT NOT NULL,
 		minimum_threshold INTEGER NOT NULL,
 		current_stock INTEGER NOT NULL,
-		unit_cost REAL,
-		is_active BOOLEAN NOT NULL,
-		created_at DATETIME NOT NULL,
-		updated_at DATETIME NOT NULL
+	unit_cost REAL,
+	is_active BOOLEAN NOT NULL,
+	track_stock BOOLEAN NOT NULL,
+	created_at DATETIME NOT NULL,
+	updated_at DATETIME NOT NULL
 	);
 	`
 	if _, err := db.Exec(schema); err != nil {
@@ -58,6 +59,7 @@ func TestItemRepository_Create_Get_List(t *testing.T) {
 		MinimumThreshold:  5,
 		CurrentStock:      10,
 		IsActive:          true,
+		TrackStock:        true,
 	}
 
 	id, err := repo.Create(ctx, item)
@@ -100,6 +102,7 @@ func TestItemRepository_UpdateStock(t *testing.T) {
 		MinimumThreshold:  1,
 		CurrentStock:      3,
 		IsActive:          true,
+		TrackStock:        true,
 	}
 	id, _ := repo.Create(ctx, item)
 

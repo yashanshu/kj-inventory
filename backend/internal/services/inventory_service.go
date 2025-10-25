@@ -14,6 +14,7 @@ import (
 var (
 	ErrItemNotFound      = errors.New("item not found")
 	ErrCategoryNotFound  = errors.New("category not found")
+	ErrCategoryHasItems  = errors.New("category has items")
 	ErrInsufficientStock = errors.New("insufficient stock")
 	ErrInvalidQuantity   = errors.New("invalid quantity")
 )
@@ -60,7 +61,7 @@ func (s *InventoryService) CreateItem(ctx context.Context, item *domain.Item) (u
 	}
 
 	// Check if initial stock is below threshold and create alert
-	if item.CurrentStock < item.MinimumThreshold {
+	if item.TrackStock && item.CurrentStock < item.MinimumThreshold {
 		s.createLowStockAlert(ctx, itemID, item.OrganizationID, item.Name, item.CurrentStock, item.MinimumThreshold)
 	}
 
@@ -84,6 +85,11 @@ func (s *InventoryService) ListItems(ctx context.Context, orgID uuid.UUID, limit
 	return s.itemRepo.List(ctx, orgID, limit, offset)
 }
 
+// ListItemsWithFilters retrieves items with optional filters
+func (s *InventoryService) ListItemsWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+	return s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, lowStockOnly, limit, offset)
+}
+
 // UpdateItem updates an existing item
 func (s *InventoryService) UpdateItem(ctx context.Context, item *domain.Item) error {
 	existing, err := s.itemRepo.GetByID(ctx, item.ID)
@@ -94,7 +100,37 @@ func (s *InventoryService) UpdateItem(ctx context.Context, item *domain.Item) er
 		return ErrItemNotFound
 	}
 
-	return s.itemRepo.Update(ctx, item)
+	// Validate category change if requested
+	if existing.CategoryID != item.CategoryID {
+		category, err := s.categoryRepo.GetByID(ctx, item.CategoryID)
+		if err != nil {
+			return err
+		}
+		if category == nil {
+			return ErrCategoryNotFound
+		}
+		if category.OrganizationID != existing.OrganizationID {
+			return fmt.Errorf("category does not belong to organization")
+		}
+	}
+
+	trackStatusChanged := existing.TrackStock != item.TrackStock
+
+	if err := s.itemRepo.Update(ctx, item); err != nil {
+		return err
+	}
+
+	if trackStatusChanged {
+		if !item.TrackStock {
+			// Remove alerts when tracking is disabled
+			_ = s.alertRepo.DeleteByItemID(ctx, item.ID)
+		} else if item.CurrentStock < item.MinimumThreshold {
+			// Re-evaluate alerts when tracking is re-enabled
+			s.createLowStockAlert(ctx, item.ID, item.OrganizationID, item.Name, item.CurrentStock, item.MinimumThreshold)
+		}
+	}
+
+	return nil
 }
 
 // DeleteItem soft deletes an item
@@ -177,10 +213,15 @@ func (s *InventoryService) AdjustStock(ctx context.Context, itemID uuid.UUID, mo
 	}
 
 	// Check for low stock alert (outside transaction)
-	if newStock < item.MinimumThreshold {
-		s.createLowStockAlert(ctx, itemID, item.OrganizationID, item.Name, newStock, item.MinimumThreshold)
-	} else if previousStock < item.MinimumThreshold && newStock >= item.MinimumThreshold {
-		// Stock is now above threshold, delete any existing alerts
+	if item.TrackStock {
+		if newStock < item.MinimumThreshold {
+			s.createLowStockAlert(ctx, itemID, item.OrganizationID, item.Name, newStock, item.MinimumThreshold)
+		} else if previousStock < item.MinimumThreshold && newStock >= item.MinimumThreshold {
+			// Stock is now above threshold, delete any existing alerts
+			s.alertRepo.DeleteByItemID(ctx, itemID)
+		}
+	} else {
+		// Ensure no lingering alerts for untracked items
 		s.alertRepo.DeleteByItemID(ctx, itemID)
 	}
 
@@ -252,14 +293,43 @@ func (s *InventoryService) UpdateCategory(ctx context.Context, category *domain.
 	return s.categoryRepo.Update(ctx, category)
 }
 
-// DeleteCategory deletes a category
-func (s *InventoryService) DeleteCategory(ctx context.Context, id uuid.UUID) error {
+// DeleteCategory deletes a category with optional reassignment
+func (s *InventoryService) DeleteCategory(ctx context.Context, id uuid.UUID, targetCategoryID *uuid.UUID) error {
 	category, err := s.categoryRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
 	if category == nil {
 		return ErrCategoryNotFound
+	}
+
+	count, err := s.itemRepo.CountByCategory(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		if targetCategoryID == nil {
+			return ErrCategoryHasItems
+		}
+		if targetCategoryID != nil && *targetCategoryID == id {
+			return errors.New("cannot reassign items to the same category")
+		}
+
+		targetCategory, err := s.categoryRepo.GetByID(ctx, *targetCategoryID)
+		if err != nil {
+			return err
+		}
+		if targetCategory == nil {
+			return ErrCategoryNotFound
+		}
+		if targetCategory.OrganizationID != category.OrganizationID {
+			return fmt.Errorf("target category must belong to the same organization")
+		}
+
+		if err := s.itemRepo.ReassignCategory(ctx, id, *targetCategoryID); err != nil {
+			return err
+		}
 	}
 
 	return s.categoryRepo.Delete(ctx, id)

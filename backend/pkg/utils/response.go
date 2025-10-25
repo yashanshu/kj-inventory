@@ -33,6 +33,8 @@ func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 func RespondSuccess(w http.ResponseWriter, status int, data interface{}) {
+	fmt.Printf("inside RespondSuccess")
+	fmt.Printf("Response Data: %+v\n", data)
 	WriteJSON(w, status, SuccessResponse{Data: data})
 }
 
