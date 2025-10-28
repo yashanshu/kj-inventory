@@ -55,7 +55,7 @@ func (r *categoryRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain
 
 	var cat domain.Category
 	var (
-		idStr, orgStr     string
+		idStr, orgStr      string
 		description, color sql.NullString
 	)
 
@@ -98,7 +98,7 @@ func (r *categoryRepoSQLite) List(ctx context.Context, orgID uuid.UUID) ([]*doma
 	for rows.Next() {
 		var cat domain.Category
 		var (
-			idStr, orgStr     string
+			idStr, orgStr      string
 			description, color sql.NullString
 		)
 

@@ -23,15 +23,18 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@9.12.1 --activate
+
 # Copy package files
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY frontend/ .
 
 # Build the app
-RUN npm run build
+RUN pnpm run build
 
 # Stage 3: Final runtime image
 FROM alpine:3.18
