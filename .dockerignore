@@ -1,0 +1,93 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+docs/
+ROADMAP.md
+API_DOCS.md
+QUICKSTART.md
+arch.md
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backend ignores
+backend/bin/
+backend/data/
+backend/*.db
+backend/*.db-*
+backend/.env
+backend/.env.*
+backend/coverage.out
+backend/tmp/
+
+# Frontend ignores
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+frontend/coverage/
+frontend/.cache/
+frontend/build/
+
+# Test files
+*_test.go
+**/*_test.go
+*.test
+test/
+tests/
+__tests__/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts (not needed in Docker)
+dist/
+build/
+
+# Scripts (not needed in image)
+scripts/deploy.sh
+scripts/server-setup.sh
+scripts/build.sh
+test_api.sh
+api_tests.http
+
+# Docker
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile
+.dockerignore
+
+# Backup files
+*.backup
+*.bak
+*.old

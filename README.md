@@ -1,13 +1,13 @@
 # KJ Inventory Management System
 
-A modern inventory management system built with Go backend and React frontend.
+A modern, mobile-first inventory management system built with Go and React, designed for restaurants and small businesses.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- Go 1.20+
-- Node.js 18+ (for frontend, coming soon)
+- Go 1.22+
+- Node.js 18+
 - Make
 
 ### Setup & Run
@@ -16,23 +16,27 @@ A modern inventory management system built with Go backend and React frontend.
    ```bash
    make migrate-up
    ```
-   This creates the SQLite database and seeds it with sample data including:
-   - Default organization
-   - Admin user (email: `admin@restaurant.local`, password: `admin123`)
-   - 5 categories (Dry Items, Dry Consumables, Deep Cold/Frozen, Perishable Cold, Packaging)
-   - 45 sample inventory items
 
-2. **Build and Run the Server**
+2. **Start Backend** (in one terminal)
    ```bash
-   make run
+   cd backend
+   go run ./cmd/server
    ```
-   Server will start on `http://localhost:8080`
+   Server starts on `http://localhost:8800`
 
-### Daily Development
+3. **Start Frontend** (in another terminal)
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Frontend starts on `http://localhost:5173`
 
-```bash
-make dev  # Run server in development mode (go run)
-```
+4. **Login**
+   - Email: `admin@example.com`
+   - Password: `admin123`
+
+   **Change default password in production!**
 
 ## 📱 Features
 
@@ -125,35 +129,40 @@ make test
 make build
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 kj-inventory/
 ├── backend/
 │   ├── cmd/server/          # Application entry point
 │   ├── internal/
-│   │   ├── config/          # Configuration management
+│   │   ├── config/          # Configuration
 │   │   ├── database/        # Database connection
-│   │   ├── domain/          # Domain models (Item, User, Category, Movement, Alert)
-│   │   ├── repository/      # Data access layer (CRUD operations)
-│   │   ├── services/        # Business logic (TODO)
-│   │   ├── handlers/        # HTTP handlers (TODO)
-│   │   └── middleware/      # HTTP middleware (auth, logging)
+│   │   ├── domain/          # Domain models
+│   │   ├── handlers/        # HTTP handlers
+│   │   ├── middleware/      # Auth, logging middleware
+│   │   ├── repository/      # Data access layer
+│   │   └── services/        # Business logic
 │   ├── migrations/sqlite/   # Database migrations
-│   │   ├── 000001_initial_schema.up.sql
-│   │   └── 000001_initial_schema.down.sql
-│   └── pkg/                 # Shared packages (logger, utils)
-├── frontend/                # React frontend (TODO)
-├── data/                    # SQLite database location
-├── Makefile                 # Build and migration commands
-└── README.md
+│   ├── pkg/                 # Shared packages
+│   └── data/                # SQLite database
+├── frontend/
+│   └── src/
+│       ├── components/      # React components
+│       ├── pages/           # Page components
+│       ├── services/        # API clients
+│       └── store/           # State management
+├── docs/                    # Documentation
+└── scripts/                 # Deployment scripts
 ```
 
-## 🔑 Default Credentials
+## Default Users
 
-**Admin User:**
-- Email: `admin@restaurant.local`
-- Password: `admin123` (⚠️ **Change in production!**)
+The migration seeds two users:
+- **Admin**: `admin@example.com` / `admin123` (Full access)
+- **Staff**: `staff@example.com` / `admin123` (Read-only)
+
+**Change these passwords in production!**
 
 ## 🛠️ Available Make Commands
 
@@ -173,55 +182,48 @@ make migrate-version      # Show current migration version
 make migrate-create       # Create new migration (NAME=xxx)
 ```
 
-## 📊 Current Status - Steps 1 & 2 Complete ✅
+## Current Status
 
-### ✅ Completed (Backend Foundation)
-- [x] Database schema with triggers and indexes
-- [x] Migration system using golang-migrate (CLI-based)
-- [x] Domain models (Item, User, Category, Movement, Alert)
-- [x] Repository layer with all CRUD operations:
-  - ItemRepository (with tests)
-  - UserRepository
-  - CategoryRepository
-  - MovementRepository
-  - AlertRepository
-- [x] Database connection with proper configuration
-- [x] Sample data seeding (45 items, 5 categories, 1 admin user)
-- [x] Build and migration tooling (Makefile)
+### ✅ MVP Complete
 
-### 🚧 Next Steps (TODO)
-- [ ] Service layer (auth, inventory, dashboard)
-- [ ] HTTP handlers
-- [ ] JWT authentication middleware implementation
-- [ ] API endpoint implementation
-- [ ] Frontend development
-- [ ] End-to-end testing
+**Backend:**
+- REST API with JWT authentication
+- Full CRUD for items, categories, movements
+- Dashboard with metrics and analytics
+- Role-based access control
+- SQLite database with migrations
+- Comprehensive test coverage
 
-## 🎯 API Endpoints (Planned)
+**Frontend:**
+- React with TypeScript
+- Mobile-responsive design
+- Real-time dashboard
+- Quick stock adjustments
+- Search and filtering
+- React Query for data fetching
 
-### Authentication
-- `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/register` - Register new user (admin only)
+**DevOps:**
+- Docker deployment
+- GitHub Actions CI/CD
+- Automated testing
+- Health checks and monitoring
 
-### Items
-- `GET /api/v1/items` - List items (with filters)
-- `POST /api/v1/items` - Create item
-- `GET /api/v1/items/{id}` - Get item details
-- `PUT /api/v1/items/{id}` - Update item
-- `DELETE /api/v1/items/{id}` - Delete item
+### Next Steps
 
-### Stock Movements
-- `POST /api/v1/movements` - Create stock movement (IN/OUT/ADJUSTMENT)
-- `GET /api/v1/movements` - List movements
-- `GET /api/v1/items/{id}/movements` - Get item movement history
+See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed feature roadmap including:
+- PostgreSQL support
+- Advanced analytics
+- Bulk operations
+- Reports and exports
+- Multi-location support
 
-### Categories
-- `GET /api/v1/categories` - List categories
-- `POST /api/v1/categories` - Create category
+## Documentation
 
-### Dashboard
-- `GET /api/v1/dashboard/metrics` - Get dashboard metrics (low stock, out of stock, etc.)
-- `GET /api/v1/dashboard/charts` - Get chart data
+- [Quick Start Guide](docs/QUICKSTART.md) - Detailed setup instructions
+- [API Documentation](docs/API_DOCS.md) - Complete API reference
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment with Docker
+- [CI/CD Setup](docs/CI_CD_SETUP.md) - GitHub Actions configuration
+- [Development Roadmap](docs/ROADMAP.md) - Planned features and timeline
 
 ## 📄 License
 

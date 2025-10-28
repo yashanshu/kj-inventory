@@ -1,0 +1,189 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'  # Run on all branches
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  # Backend CI Job
+  backend-tests:
+    name: Backend Tests & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Run go fmt check
+        working-directory: ./backend
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: ./backend
+        run: go vet ./...
+
+      - name: Run tests
+        working-directory: ./backend
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov (optional)
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push'
+        with:
+          files: ./backend/coverage.out
+          flags: backend
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Build backend
+        working-directory: ./backend
+        run: CGO_ENABLED=1 go build -v -o bin/server ./cmd/server
+
+  # Frontend CI Job
+  frontend-build:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-alpine
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        run: npm install -g pnpm@8
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: pnpm lint
+
+      - name: Run TypeScript check
+        working-directory: ./frontend
+        run: pnpm exec tsc -b --noEmit
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: pnpm build
+
+      - name: Check build size
+        working-directory: ./frontend
+        run: |
+          echo "Frontend build size:"
+          du -sh dist/
+
+  # Docker Build Job
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: kj-inventory:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # API Integration Tests (optional, requires test suite)
+  api-tests:
+    name: API Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+
+      - name: Start test database
+        working-directory: ./backend
+        run: |
+          mkdir -p data
+          go mod download
+
+      - name: Run migrations
+        working-directory: ./backend
+        run: |
+          go run -tags 'sqlite3' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+            -path migrations/sqlite \
+            -database "sqlite3://./data/test.db?_fk=1" up
+
+      - name: Start backend server
+        working-directory: ./backend
+        run: |
+          export DATABASE_URL="./data/test.db?_fk=1"
+          export SERVER_PORT=8800
+          export JWT_SECRET="test-secret-key"
+          go run ./cmd/server &
+          echo $! > server.pid
+
+          # Wait for server to start
+          timeout 30 bash -c 'until curl -f http://localhost:8800/health; do sleep 1; done'
+
+      - name: Run API tests
+        run: |
+          chmod +x test_api.sh
+          BASE_URL=http://localhost:8800 ./test_api.sh || true
+
+      - name: Stop backend server
+        if: always()
+        working-directory: ./backend
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+
+  # Summary Job
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build, docker-build]
+    if: always()
+
+    steps:
+      - name: Check CI status
+        run: |
+          if [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.frontend-build.result }}" != "success" ] || \
+             [ "${{ needs.docker-build.result }}" != "success" ]; then
+            echo "CI failed!"
+            exit 1
+          fi
+          echo "All CI checks passed! ✅"

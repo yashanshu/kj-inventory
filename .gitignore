@@ -9,6 +9,7 @@ homebox.db-wal
 .DS_Store
 test-mailer.json
 node_modules
+test_api.sh
 
 *.venv
 # If you prefer the allow list template instead of the deny list, see community template:
@@ -36,11 +37,10 @@ go.work
 backend/.env
 build/*
 bin/*
-backend/data/inventory.db
+backend/data/*
 
 node_modules
 *.log*
-.nuxt
 .nitro
 .cache
 .output
@@ -58,3 +58,12 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
+
+# CI/CD and Deployment
+.env.production
+.env.staging
+*.backup
+*.backup.gz
+deployment-key
+deployment-key.pub
+server-setup-output.txt

@@ -1,7 +1,7 @@
 .PHONY: help migrate-up migrate-down migrate-create migrate-force build run clean
 
 # Default database URL
-DB_URL ?= sqlite3://./data/inventory.db?_fk=1
+DB_URL ?= sqlite3://./backend/data/inventory.db?_fk=1
 MIGRATIONS_PATH ?= backend/migrations/sqlite
 
 help: ## Show this help message
@@ -32,12 +32,12 @@ migrate-create: ## Create a new migration (use: make migrate-create NAME=add_use
 
 build: ## Build the backend server
 	@echo "Building server..."
-	@cd backend && go build -o ../bin/server ./cmd/server
-	@echo "Build complete: bin/server"
+	@cd backend && go build -o bin/server ./cmd/server
+	@echo "Build complete: backend/bin/server"
 
 run: build ## Build and run the server
 	@echo "Starting server..."
-	@./bin/server
+	@./backend/bin/server
 
 dev: ## Run server in development mode (assumes migrations already run)
 	@cd backend && go run ./cmd/server
