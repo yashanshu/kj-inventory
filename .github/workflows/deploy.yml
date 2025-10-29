@@ -108,9 +108,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          source: |
-            docker-compose.prod.yml
-            scripts/deploy.sh
+          source: docker-compose.prod.yml,scripts/deploy.sh
           target: /opt/kj-inventory
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
