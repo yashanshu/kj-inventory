@@ -161,13 +161,13 @@ networks:
   kj-network:
     driver: bridge
 
-volumes:
-  # Uncomment when enabling PostgreSQL
-  # postgres_data:
-  #   driver: local
-
-  # Uncomment when enabling monitoring
-  # prometheus_data:
-  #   driver: local
-  # grafana_data:
-  #   driver: local
+# Define named volumes only when enabling optional services.
+volumes: {}
+# Example:
+# volumes:
+#   postgres_data:
+#     driver: local
+#   prometheus_data:
+#     driver: local
+#   grafana_data:
+#     driver: local
