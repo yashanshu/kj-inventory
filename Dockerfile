@@ -41,8 +41,8 @@ RUN pnpm run build
 FROM alpine:3.20
 
 RUN apk --no-cache add ca-certificates sqlite wget su-exec && \
-    addgroup -g 1000 appgroup && \
-    adduser -u 1000 -G appgroup -s /bin/sh -D appuser
+    addgroup -g 1001 appgroup && \
+    adduser -u 1001 -G appgroup -s /bin/sh -D appuser
 
 WORKDIR /app
 
