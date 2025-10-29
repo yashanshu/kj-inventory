@@ -3,6 +3,8 @@ version: '3.8'
 services:
   app:
     image: ghcr.io/yashanshu/kj-inventory:latest
+    # Match container runtime user/group with host volume ownership
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     container_name: kj-inventory-app
     restart: unless-stopped
 

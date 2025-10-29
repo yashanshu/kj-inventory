@@ -250,6 +250,10 @@ DATABASE_URL=file:/app/data/inventory.db?_fk=1
 APP_HOST_PORT=8080
 LOG_LEVEL=info
 
+# Container runtime user/group (override if host uses different UID/GID)
+APP_UID=2001
+APP_GID=2001
+
 # Optional: PostgreSQL (uncomment when migrating from SQLite)
 # POSTGRES_DB=inventory
 # POSTGRES_USER=inventory_user

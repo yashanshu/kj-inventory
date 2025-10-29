@@ -101,6 +101,23 @@ This script will:
 - ✅ Create environment template
 - ✅ Set up log rotation
 
+### Step 1.1: Align container permissions with host volumes
+
+The production container runs as a non-root user. By default it uses UID/GID `1000`, but you can override this via `APP_UID` and `APP_GID` in `.env.production`. Make sure the host directories mounted into the container (`/opt/kj-inventory/data` and `/opt/kj-inventory/logs`) are owned by the same UID/GID so the application can write to them:
+
+```bash
+# Replace 1000 with the values you set for APP_UID/APP_GID
+APP_UID=1000
+APP_GID=1000
+
+sudo getent group "${APP_GID}" >/dev/null || sudo groupadd -g "${APP_GID}" appgroup || true
+sudo chown -R "${APP_UID}:${APP_GID}" /opt/kj-inventory/{data,logs}
+sudo find /opt/kj-inventory/{data,logs} -type d -exec chmod 2775 {} \;
+sudo find /opt/kj-inventory/{data,logs} -type f -exec chmod 664 {} \;
+```
+
+The `chmod 2775` ensures new files inherit the correct group, keeping permissions consistent after deployments.
+
 ### Step 2: Generate SSH Keys (Local Machine)
 
 On your local machine, generate SSH keys for GitHub Actions:
