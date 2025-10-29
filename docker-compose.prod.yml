@@ -11,15 +11,15 @@ services:
 
     environment:
       # Server Configuration
-      - SERVER_PORT=8080
-      - SERVER_READ_TIMEOUT=15
-      - SERVER_WRITE_TIMEOUT=15
+      - SERVER_PORT=${SERVER_PORT:-8080}
+      - SERVER_READ_TIMEOUT=${SERVER_READ_TIMEOUT:-15}
+      - SERVER_WRITE_TIMEOUT=${SERVER_WRITE_TIMEOUT:-15}
 
       # Database Configuration (SQLite)
-      - DATABASE_DRIVER=sqlite3
-      - DATABASE_URL=/app/data/inventory.db?_fk=1
-      - DATABASE_MAX_OPEN_CONN=25
-      - DATABASE_MAX_IDLE_CONN=10
+      - DATABASE_DRIVER=${DATABASE_DRIVER:-sqlite3}
+      - DATABASE_URL=${DATABASE_URL:-file:/app/data/inventory.db?_fk=1}
+      - DATABASE_MAX_OPEN_CONN=${DATABASE_MAX_OPEN_CONN:-25}
+      - DATABASE_MAX_IDLE_CONN=${DATABASE_MAX_IDLE_CONN:-10}
 
       # JWT Configuration (MUST be set via .env file or secrets)
       - JWT_SECRET=${JWT_SECRET}

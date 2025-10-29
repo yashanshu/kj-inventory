@@ -243,7 +243,7 @@ JWT_SECRET=CHANGE_THIS_TO_A_STRONG_RANDOM_SECRET_AT_LEAST_32_CHARS
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
 
 # Database Configuration (SQLite)
-DATABASE_URL=/app/data/inventory.db?_fk=1
+DATABASE_URL=file:/app/data/inventory.db?_fk=1
 
 # Application Configuration
 # Change APP_HOST_PORT if 8080 conflicts with another service
