@@ -19,6 +19,9 @@ COPY backend/ .
 # Build the binary
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o server ./cmd/server
 
+# Build migrate tool with sqlite3 support for running migrations
+RUN CGO_ENABLED=1 GOOS=linux go build -tags 'sqlite3' -ldflags="-s -w" -o migrate github.com/golang-migrate/migrate/v4/cmd/migrate
+
 # Stage 2: Build React frontend
 FROM node:20-alpine AS frontend-builder
 
@@ -48,6 +51,9 @@ WORKDIR /app
 
 # Copy built backend
 COPY --from=backend-builder /app/backend/server .
+
+# Copy migrate tool with sqlite3 support
+COPY --from=backend-builder /app/backend/migrate /usr/local/bin/migrate
 
 # Copy migrations (fix path)
 COPY --from=backend-builder /app/backend/migrations ./migrations

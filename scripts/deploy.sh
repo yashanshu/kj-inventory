@@ -167,10 +167,44 @@ backup_database() {
     fi
 }
 
-# Database migrations are handled automatically by the application on startup
-# This function is kept for future use if manual migrations are needed
+# Run database migrations before deployment
 run_migrations() {
-    log_info "Database migrations are handled automatically on container startup"
+    log_info "Running database migrations..."
+
+    local db_file="${DATA_DIR}/inventory.db"
+    local migrations_path="/app/migrations/sqlite"
+
+    # Ensure database file exists with proper permissions
+    if [ ! -f "${db_file}" ]; then
+        log_info "Database file not found, will be created during migration"
+        touch "${db_file}"
+        chown kjinventory:kjinventory "${db_file}" 2>/dev/null || true
+    fi
+
+    # Run migrations using the migrate binary from the container
+    # We'll use docker run with a temporary container to execute migrations
+    local image_name="${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}"
+
+    log_info "Running migrations with image: ${image_name}"
+
+    if docker run --rm \
+        -v "${DATA_DIR}:/app/data" \
+        "${image_name}" \
+        /usr/local/bin/migrate \
+        -path /app/migrations/sqlite \
+        -database "sqlite3:///app/data/inventory.db?_fk=1" \
+        up; then
+        log_success "Migrations completed successfully"
+    else
+        local exit_code=$?
+        if [ ${exit_code} -eq 0 ]; then
+            log_info "No new migrations to apply"
+        else
+            log_error "Migration failed with exit code ${exit_code}"
+            return 1
+        fi
+    fi
+
     return 0
 }
 
@@ -340,6 +374,7 @@ main() {
     save_current_image_tag
     backup_database
     pull_latest_image
+    run_migrations  # Run migrations BEFORE deploying new containers
     deploy
 
     # Run health check
