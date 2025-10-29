@@ -16,6 +16,7 @@
 ###############################################################################
 
 set -e  # Exit on any error
+umask 002  # Ensure new files are group-writable
 
 # Colors for output
 RED='\033[0;31m'
@@ -131,7 +132,12 @@ backup_database() {
         local timestamp=$(date +%Y%m%d_%H%M%S)
         local backup_file="${BACKUP_DIR}/inventory.db.${timestamp}.backup"
 
-        cp "${db_file}" "${backup_file}"
+        if ! cp "${db_file}" "${backup_file}"; then
+            log_error "Failed to back up database to ${backup_file}"
+            log_error "Ensure $(id -un) owns ${DATA_DIR} or has write access to it."
+            log_error "Tip: run 'sudo chown -R kjinventory:kjinventory ${DATA_DIR}' and retry."
+            exit 1
+        fi
         log_success "Database backed up to: ${backup_file}"
 
         # Compress old backups

@@ -216,6 +216,8 @@ setup_project_directory() {
     # Set permissions
     chmod 755 "${PROJECT_DIR}"
     chmod 755 "${PROJECT_DIR}/data"
+    chmod 755 "${PROJECT_DIR}/data/backups"
+    chmod 755 "${PROJECT_DIR}/data/uploads"
     chmod 755 "${PROJECT_DIR}/logs"
 
     log_success "Project directory created at: ${PROJECT_DIR}"
@@ -249,10 +251,6 @@ DATABASE_URL=file:/app/data/inventory.db?_fk=1
 # Change APP_HOST_PORT if 8080 conflicts with another service
 APP_HOST_PORT=8080
 LOG_LEVEL=info
-
-# Container runtime user/group (override if host uses different UID/GID)
-APP_UID=2001
-APP_GID=2001
 
 # Optional: PostgreSQL (uncomment when migrating from SQLite)
 # POSTGRES_DB=inventory

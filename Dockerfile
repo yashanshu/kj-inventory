@@ -39,7 +39,7 @@ RUN pnpm run build
 # Stage 3: Final runtime image
 FROM alpine:3.18
 
-RUN apk --no-cache add ca-certificates sqlite wget && \
+RUN apk --no-cache add ca-certificates sqlite wget su-exec && \
     addgroup -g 1000 appgroup && \
     adduser -u 1000 -G appgroup -s /bin/sh -D appuser
 
@@ -56,8 +56,8 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Create data directory for SQLite and logs
 RUN mkdir -p /app/data /app/logs && chown -R appuser:appgroup /app
-
-USER appuser
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
 
@@ -65,4 +65,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["./server"]

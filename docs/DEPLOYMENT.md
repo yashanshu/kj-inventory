@@ -101,22 +101,17 @@ This script will:
 - ✅ Create environment template
 - ✅ Set up log rotation
 
-### Step 1.1: Align container permissions with host volumes
+### Step 1.1: Verify application directories
 
-The production container runs as a non-root user. By default it uses UID/GID `1000`, but you can override this via `APP_UID` and `APP_GID` in `.env.production`. Make sure the host directories mounted into the container (`/opt/kj-inventory/data` and `/opt/kj-inventory/logs`) are owned by the same UID/GID so the application can write to them:
+The server setup script already creates `/opt/kj-inventory/data` and `/opt/kj-inventory/logs`.  
+If you created the directories manually, just make sure they exist and are readable by the `kjinventory` user:
 
 ```bash
-# Replace 1000 with the values you set for APP_UID/APP_GID
-APP_UID=1000
-APP_GID=1000
-
-sudo getent group "${APP_GID}" >/dev/null || sudo groupadd -g "${APP_GID}" appgroup || true
-sudo chown -R "${APP_UID}:${APP_GID}" /opt/kj-inventory/{data,logs}
-sudo find /opt/kj-inventory/{data,logs} -type d -exec chmod 2775 {} \;
-sudo find /opt/kj-inventory/{data,logs} -type f -exec chmod 664 {} \;
+sudo chown -R kjinventory:kjinventory /opt/kj-inventory
+sudo find /opt/kj-inventory -type d -exec chmod 755 {} \;
 ```
 
-The `chmod 2775` ensures new files inherit the correct group, keeping permissions consistent after deployments.
+The container now initializes its own permissions during startup, so no additional UID/GID alignment is required.
 
 ### Step 2: Generate SSH Keys (Local Machine)
 
@@ -188,16 +183,19 @@ Save and exit (Ctrl+X, then Y, then Enter).
 
 > **Tip:** If port `8080` is already used on your server (for example by another service or an old container), update `APP_HOST_PORT` to a free port and open that port in your firewall.
 
-### Step 5: Copy Deployment Files
+### Step 5: Prepare the deployment directory
 
-Copy necessary files to the server:
+Create the deployment directory structure (the GitHub Actions workflow will upload the latest `docker-compose.prod.yml` and `scripts/deploy.sh` on every run):
 
 ```bash
-# From your local machine
-scp docker-compose.prod.yml kjinventory@YOUR_SERVER_IP:/opt/kj-inventory/
-scp scripts/deploy.sh kjinventory@YOUR_SERVER_IP:/opt/kj-inventory/scripts/
-chmod +x /opt/kj-inventory/scripts/deploy.sh
+ssh kjinventory@YOUR_SERVER_IP
+mkdir -p /opt/kj-inventory/scripts
+mkdir -p /opt/kj-inventory/data/backups
+mkdir -p /opt/kj-inventory/logs
+chown -R kjinventory:kjinventory /opt/kj-inventory
 ```
+
+> No Git repository is required on the server—the CI/CD pipeline keeps the compose file and deployment script up to date via SCP before each deployment.
 
 ---
 
