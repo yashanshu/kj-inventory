@@ -95,8 +95,8 @@ jobs:
           platforms: linux/amd64
       - name: Save Docker config for registry access
         run: |
-          mkdir -p ~/.docker-config-temp
-          cp ~/.docker/config.json ~/.docker-config-temp/config.json
+          mkdir -p .docker-config-temp
+          cp ~/.docker/config.json .docker-config-temp/config.json
 
       - name: Ensure deployment directories exist
         uses: appleboy/ssh-action@v1.0.3
@@ -128,7 +128,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          source: ~/.docker-config-temp/config.json
+          source: .docker-config-temp/config.json
           target: ~/.docker/
           strip_components: 1
       - name: Deploy to server
