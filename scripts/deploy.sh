@@ -31,7 +31,9 @@ BACKUP_DIR="${DATA_DIR}/backups"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
 ENV_FILE="${PROJECT_DIR}/.env.production"
 MAX_BACKUPS=10
-HEALTH_CHECK_URL="http://localhost:8080/health"
+DEFAULT_APP_HOST_PORT=8080
+APP_HOST_PORT="${DEFAULT_APP_HOST_PORT}"
+HEALTH_CHECK_URL=""
 HEALTH_CHECK_RETRIES=30
 HEALTH_CHECK_INTERVAL=2
 DOCKER_COMPOSE_CMD=()
@@ -98,6 +100,20 @@ configure_env_file() {
         COMPOSE_ENV_ARGS=()
         log_warning ".env.production not found; continuing without --env-file"
     fi
+}
+
+load_env_vars() {
+    if [ -f "${ENV_FILE}" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "${ENV_FILE}"
+        set +a
+    fi
+
+    APP_HOST_PORT="${APP_HOST_PORT:-${DEFAULT_APP_HOST_PORT}}"
+    HEALTH_CHECK_URL="http://localhost:${APP_HOST_PORT}/health"
+
+    log_info "Target application host port: ${APP_HOST_PORT}"
 }
 
 run_compose() {
@@ -182,12 +198,25 @@ deploy() {
     if run_compose up -d; then
         log_success "New container started"
     else
+        diagnose_port_conflict
         log_error "Failed to start new container"
         exit 1
     fi
 
     # Wait for container to be ready
     sleep 5
+}
+
+diagnose_port_conflict() {
+    log_warning "Port ${APP_HOST_PORT} might already be in use."
+    log_info "Suggested commands:"
+    log_info "  sudo lsof -i :${APP_HOST_PORT}"
+    log_info "  sudo ss -ltnp | grep :${APP_HOST_PORT}"
+
+    if command -v ss >/dev/null 2>&1; then
+        log_info "Current listeners on port ${APP_HOST_PORT}:"
+        ss -ltnp | grep -F ":${APP_HOST_PORT}" || true
+    fi
 }
 
 # Health check
@@ -250,7 +279,7 @@ show_deployment_info() {
     log_info "Container Logs (last 20 lines):"
     run_compose logs --tail=20
 
-    log_success "Application URL: http://$(hostname -I | awk '{print $1}'):8080"
+    log_success "Application URL: http://$(hostname -I | awk '{print $1}'):${APP_HOST_PORT}"
     log_success "Health Check: ${HEALTH_CHECK_URL}"
 }
 
@@ -267,6 +296,7 @@ main() {
 
     # Run deployment steps
     check_prerequisites
+    load_env_vars
     backup_database
     pull_latest_image
     deploy

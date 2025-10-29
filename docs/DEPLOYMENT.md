@@ -158,6 +158,9 @@ JWT_SECRET=your_strong_random_secret_here_at_least_32_characters
 # Update with your domain (if using reverse proxy)
 CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
+# Change if another service already uses 8080 on the host
+APP_HOST_PORT=8080
+
 # Optional: PostgreSQL (if migrating from SQLite)
 # POSTGRES_DB=inventory
 # POSTGRES_USER=inventory_user
@@ -165,6 +168,8 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 ```
 
 Save and exit (Ctrl+X, then Y, then Enter).
+
+> **Tip:** If port `8080` is already used on your server (for example by another service or an old container), update `APP_HOST_PORT` to a free port and open that port in your firewall.
 
 ### Step 5: Copy Deployment Files
 
@@ -438,13 +443,21 @@ docker build -t kj-inventory:test .
 **Health Check Failed:**
 ```bash
 # Check if port is accessible
-curl http://YOUR_SERVER_IP:8080/health
+curl http://YOUR_SERVER_IP:8080/health  # Replace 8080 if you changed APP_HOST_PORT
 
 # Check container logs
 docker logs kj-inventory-app
 
 # Check if container is running
 docker ps -a
+```
+
+**`address already in use` during `docker compose up`:**
+```bash
+# Find which process holds the port (replace 8080 if you changed APP_HOST_PORT)
+sudo ss -ltnp | grep :8080 || sudo lsof -i :8080
+
+# Stop or reconfigure the conflicting service, or change APP_HOST_PORT in /opt/kj-inventory/.env.production and re-run the deploy.
 ```
 
 ### Application Not Responding
@@ -457,7 +470,7 @@ docker ps -a
 docker logs kj-inventory-app --tail=100
 
 # Check if port is bound
-netstat -tulpn | grep 8080
+sudo ss -ltnp | grep :8080  # Replace 8080 if you changed APP_HOST_PORT
 
 # Restart container
 docker restart kj-inventory-app

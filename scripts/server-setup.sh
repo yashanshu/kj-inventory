@@ -246,6 +246,8 @@ CORS_ALLOWED_ORIGINS=https://yourdomain.com
 DATABASE_URL=/app/data/inventory.db?_fk=1
 
 # Application Configuration
+# Change APP_HOST_PORT if 8080 conflicts with another service
+APP_HOST_PORT=8080
 LOG_LEVEL=info
 
 # Optional: PostgreSQL (uncomment when migrating from SQLite)
@@ -295,6 +297,7 @@ configure_firewall() {
 
     log_success "Firewall configured"
     log_info "Allowed ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 8080 (App)"
+    log_warning "If you change APP_HOST_PORT, update the firewall to allow the new port."
 }
 
 # Setup log rotation
