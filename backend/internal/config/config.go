@@ -36,7 +36,7 @@ type Config struct {
 }
 
 func Load() Config {
-	port := getEnv("SERVER_PORT", "8800")
+	port := getEnv("SERVER_PORT", "8888")
 	readTimeout := getEnvAsInt("SERVER_READ_TIMEOUT", 15)
 	writeTimeout := getEnvAsInt("SERVER_WRITE_TIMEOUT", 15)
 

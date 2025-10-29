@@ -18,52 +18,52 @@ import type {
 export const inventoryService = {
   // Items
   async getItems(query?: ListItemsQuery): Promise<Item[]> {
-    return apiClient.get<Item[]>('/api/v1/items', query);
+    return apiClient.get<Item[]>('/items', query);
   },
 
   async getItem(id: string): Promise<Item> {
-    return apiClient.get<Item>(`/api/v1/items/${id}`);
+    return apiClient.get<Item>(`/items/${id}`);
   },
 
   async createItem(data: CreateItemRequest): Promise<Item> {
-    return apiClient.post<Item>('/api/v1/items', data);
+    return apiClient.post<Item>('/items', data);
   },
 
   async updateItem(id: string, data: UpdateItemRequest): Promise<Item> {
-    return apiClient.put<Item>(`/api/v1/items/${id}`, data);
+    return apiClient.put<Item>(`/items/${id}`, data);
   },
 
   async deleteItem(id: string): Promise<void> {
-    return apiClient.delete<void>(`/api/v1/items/${id}`);
+    return apiClient.delete<void>(`/items/${id}`);
   },
 
   // Categories
   async getCategories(): Promise<Category[]> {
-    return apiClient.get<Category[]>('/api/v1/categories');
+    return apiClient.get<Category[]>('/categories');
   },
 
   async createCategory(data: CreateCategoryRequest): Promise<Category> {
-    return apiClient.post<Category>('/api/v1/categories', data);
+    return apiClient.post<Category>('/categories', data);
   },
 
   async updateCategory(id: string, data: UpdateCategoryRequest): Promise<Category> {
-    return apiClient.put<Category>(`/api/v1/categories/${id}`, data);
+    return apiClient.put<Category>(`/categories/${id}`, data);
   },
 
   async deleteCategory(id: string, data?: DeleteCategoryRequest): Promise<void> {
-    return apiClient.delete<void>(`/api/v1/categories/${id}`, data);
+    return apiClient.delete<void>(`/categories/${id}`, data);
   },
 
   // Stock Movements
   async createMovement(data: CreateMovementRequest): Promise<StockMovement> {
-    return apiClient.post<StockMovement>('/api/v1/movements', data);
+    return apiClient.post<StockMovement>('/movements', data);
   },
 
   async getMovements(query?: ListMovementsQuery): Promise<StockMovement[]> {
-    return apiClient.get<StockMovement[]>('/api/v1/movements', query);
+    return apiClient.get<StockMovement[]>('/movements', query);
   },
 
   async getItemMovements(itemId: string, query?: ListMovementsQuery): Promise<StockMovement[]> {
-    return apiClient.get<StockMovement[]>(`/api/v1/items/${itemId}/movements`, query);
+    return apiClient.get<StockMovement[]>(`/items/${itemId}/movements`, query);
   },
 };

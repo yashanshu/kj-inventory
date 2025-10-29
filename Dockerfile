@@ -2,7 +2,7 @@
 # Multi-stage build for minimal production image
 
 # Stage 1: Build Go backend
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.23-alpine AS backend-builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
@@ -19,7 +19,7 @@ COPY backend/ .
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o server ./cmd/server
 
 # Stage 2: Build React frontend
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -37,7 +37,7 @@ COPY frontend/ .
 RUN pnpm run build
 
 # Stage 3: Final runtime image
-FROM alpine:3.18
+FROM alpine:3.20
 
 RUN apk --no-cache add ca-certificates sqlite wget su-exec && \
     addgroup -g 1000 appgroup && \

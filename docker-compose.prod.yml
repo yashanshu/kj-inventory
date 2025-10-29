@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
   app:
-    image: ghcr.io/yashanshu/kj-inventory:latest
-    container_name: kj-inventory-app
+    image: ${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}
     restart: unless-stopped
 
     ports:

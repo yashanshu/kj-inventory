@@ -31,6 +31,7 @@ DATA_DIR="${PROJECT_DIR}/data"
 BACKUP_DIR="${DATA_DIR}/backups"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
 ENV_FILE="${PROJECT_DIR}/.env.production"
+IMAGE_TAG_FILE="${DATA_DIR}/.previous_image_tag"
 MAX_BACKUPS=10
 DEFAULT_APP_HOST_PORT=8080
 APP_HOST_PORT="${DEFAULT_APP_HOST_PORT}"
@@ -39,6 +40,7 @@ HEALTH_CHECK_RETRIES=30
 HEALTH_CHECK_INTERVAL=2
 DOCKER_COMPOSE_CMD=()
 COMPOSE_ENV_ARGS=()
+PREVIOUS_IMAGE_TAG=""
 
 ###############################################################################
 # Helper Functions
@@ -98,8 +100,10 @@ configure_env_file() {
         COMPOSE_ENV_ARGS=(--env-file "${ENV_FILE}")
         log_success "Using environment file: ${ENV_FILE}"
     else
-        COMPOSE_ENV_ARGS=()
-        log_warning ".env.production not found; continuing without --env-file"
+        log_error ".env.production not found at ${ENV_FILE}"
+        log_error "This file is required for production deployments."
+        log_error "Please create it with required variables (JWT_SECRET, etc.)"
+        exit 1
     fi
 }
 
@@ -115,6 +119,15 @@ load_env_vars() {
     HEALTH_CHECK_URL="http://localhost:${APP_HOST_PORT}/health"
 
     log_info "Target application host port: ${APP_HOST_PORT}"
+
+    # Validate critical environment variables
+    if [ -z "${JWT_SECRET}" ] || [ "${JWT_SECRET}" = "your-super-secret-jwt-key-change-in-production" ]; then
+        log_error "JWT_SECRET is not set or using default value!"
+        log_error "Set a strong, unique JWT_SECRET in ${ENV_FILE}"
+        exit 1
+    fi
+
+    log_success "Environment variables validated"
 }
 
 run_compose() {
@@ -154,29 +167,32 @@ backup_database() {
     fi
 }
 
-# Run database migrations
+# Database migrations are handled automatically by the application on startup
+# This function is kept for future use if manual migrations are needed
 run_migrations() {
-    log_info "Running database migrations..."
+    log_info "Database migrations are handled automatically on container startup"
+    return 0
+}
 
-    # Check if container is running
-    if ! docker ps | grep -q kj-inventory-app; then
-        log_warning "Container not running, starting temporarily for migrations..."
-        run_compose up -d
-        sleep 5
+# Save current image tag for potential rollback
+save_current_image_tag() {
+    log_info "Saving current image tag for rollback..."
+
+    # Get current running image using compose
+    local current_image=$(run_compose images -q app 2>/dev/null | head -1 || echo "")
+
+    if [ -z "${current_image}" ]; then
+        # Try getting from running container
+        current_image=$(docker ps --filter "label=com.docker.compose.service=app" --format "{{.Image}}" 2>/dev/null | head -1 || echo "")
     fi
 
-    # Run migrations inside the container
-    docker exec kj-inventory-app sh -c "
-        if [ -d /app/migrations/sqlite ]; then
-            echo 'Migrations directory found'
-            # Note: Add migration runner if needed
-            # For now, migrations are handled during container startup
-        else
-            echo 'No migrations directory found'
-        fi
-    " || log_warning "Could not run migrations (may not be needed)"
-
-    log_success "Migrations completed"
+    if [ -n "${current_image}" ]; then
+        echo "${current_image}" > "${IMAGE_TAG_FILE}"
+        PREVIOUS_IMAGE_TAG="${current_image}"
+        log_success "Saved previous image: ${current_image}"
+    else
+        log_warning "No previous image found (first deployment?)"
+    fi
 }
 
 # Pull latest Docker image
@@ -249,20 +265,38 @@ health_check() {
 rollback() {
     log_error "Deployment failed! Starting rollback..."
 
+    # Restore previous image if available
+    if [ -f "${IMAGE_TAG_FILE}" ] && [ -n "${PREVIOUS_IMAGE_TAG}" ]; then
+        log_info "Restoring previous Docker image: ${PREVIOUS_IMAGE_TAG}"
+
+        # Temporarily override image in docker-compose
+        export DOCKER_IMAGE="${PREVIOUS_IMAGE_TAG}"
+
+        # Pull the previous image
+        docker pull "${PREVIOUS_IMAGE_TAG}" || log_warning "Could not pull previous image, will use local cache"
+    else
+        log_warning "No previous image tag found, skipping image rollback"
+    fi
+
     # Find the latest backup
     local latest_backup=$(ls -t "${BACKUP_DIR}"/*.backup 2>/dev/null | head -n1)
 
-    if [ -z "${latest_backup}" ]; then
-        log_error "No backup found for rollback!"
-        exit 1
+    if [ -n "${latest_backup}" ]; then
+        log_info "Restoring database from: ${latest_backup}"
+        cp "${latest_backup}" "${DATA_DIR}/inventory.db"
+    else
+        log_warning "No database backup found for rollback"
     fi
-
-    log_info "Restoring database from: ${latest_backup}"
-    cp "${latest_backup}" "${DATA_DIR}/inventory.db"
 
     log_info "Restarting with previous configuration..."
     run_compose down
-    run_compose up -d
+
+    if [ -n "${PREVIOUS_IMAGE_TAG}" ]; then
+        # Start with previous image
+        DOCKER_IMAGE="${PREVIOUS_IMAGE_TAG}" run_compose up -d
+    else
+        run_compose up -d
+    fi
 
     log_warning "Rollback completed. Please investigate the deployment failure."
     exit 1
@@ -303,6 +337,7 @@ main() {
     # Run deployment steps
     check_prerequisites
     load_env_vars
+    save_current_image_tag
     backup_database
     pull_latest_image
     deploy

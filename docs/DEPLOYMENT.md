@@ -13,6 +13,7 @@ Complete guide for deploying KJ Inventory to production using Docker and GitHub 
 7. [Maintenance](#maintenance)
 8. [Troubleshooting](#troubleshooting)
 9. [Rollback Procedures](#rollback-procedures)
+10. [Future Improvements](#future-improvements)
 
 ---
 
@@ -331,14 +332,14 @@ docker pull ghcr.io/yashanshu/kj-inventory:latest
 ### View Logs
 
 ```bash
-# Real-time logs
-docker-compose -f /opt/kj-inventory/docker-compose.prod.yml logs -f
+# Real-time logs (use 'docker compose' or 'docker-compose' based on your version)
+docker compose -f /opt/kj-inventory/docker-compose.prod.yml logs -f
 
 # Last 100 lines
-docker-compose -f /opt/kj-inventory/docker-compose.prod.yml logs --tail=100
+docker compose -f /opt/kj-inventory/docker-compose.prod.yml logs --tail=100
 
-# Specific service
-docker logs kj-inventory-app -f
+# Specific service (use service name from compose, not container name)
+docker compose -f /opt/kj-inventory/docker-compose.prod.yml logs app -f
 ```
 
 ### Check Container Status
@@ -347,11 +348,11 @@ docker logs kj-inventory-app -f
 # List running containers
 docker ps
 
-# Check container health
-docker inspect kj-inventory-app | grep -A 10 Health
+# Check container health (use compose service name)
+docker compose -f /opt/kj-inventory/docker-compose.prod.yml ps
 
-# View resource usage
-docker stats kj-inventory-app
+# View resource usage (find container ID from 'docker ps')
+docker stats
 ```
 
 ### Database Backups
@@ -395,8 +396,9 @@ docker-compose -f /opt/kj-inventory/docker-compose.prod.yml up -d
 ### View Database
 
 ```bash
-# Access SQLite database
-docker exec -it kj-inventory-app sh
+# Access SQLite database (find container ID with 'docker ps')
+CONTAINER_ID=$(docker ps --filter "label=com.docker.compose.service=app" --format "{{.ID}}" | head -1)
+docker exec -it $CONTAINER_ID sh
 cd /app/data
 sqlite3 inventory.db
 
@@ -523,7 +525,10 @@ find /opt/kj-inventory/data/backups/ -name "*.backup.gz" -mtime +30 -delete
 
 ### Automatic Rollback
 
-The deployment script automatically rolls back if health checks fail.
+The deployment script automatically rolls back if health checks fail. It will:
+1. Restore the previous Docker image version (tracked in `/opt/kj-inventory/data/.previous_image_tag`)
+2. Restore the most recent database backup
+3. Restart the application with the previous configuration
 
 ### Manual Rollback to Previous Version
 
@@ -533,20 +538,21 @@ ssh kjinventory@YOUR_SERVER_IP
 cd /opt/kj-inventory
 
 # Stop current container
-docker-compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml down
 
 # Restore database from backup
 ls -lt data/backups/ | head -n 2  # Find latest backup
 cp data/backups/inventory.db.XXXXXX.backup data/inventory.db
 
-# Pull specific image version (replace SHA with commit)
+# Check the previous image tag
+cat data/.previous_image_tag
+
+# Set the previous image and start
+DOCKER_IMAGE=$(cat data/.previous_image_tag) docker compose -f docker-compose.prod.yml up -d
+
+# OR manually pull a specific version (replace SHA with commit)
 docker pull ghcr.io/yashanshu/kj-inventory:master-abc1234
-
-# Update docker-compose to use specific image
-# Edit docker-compose.prod.yml and change image tag
-
-# Start application
-docker-compose -f docker-compose.prod.yml up -d
+DOCKER_IMAGE=ghcr.io/yashanshu/kj-inventory:master-abc1234 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### Rollback Database Only
@@ -635,6 +641,150 @@ Uncomment Prometheus and Grafana services in `docker-compose.prod.yml`.
 
 ---
 
-**Last Updated**: 2025-10-27
-**Version**: 1.0
+## Future Improvements
+
+The following are recommended long-term improvements to enhance the deployment infrastructure. These are not critical for current operations but will improve reliability, security, and observability as the application grows.
+
+### High-Value Improvements
+
+#### 1. Zero-Downtime Deployments
+**Goal**: Eliminate service interruption during deployments
+**Current**: Application stops briefly during `docker compose down/up`
+**Solution**: Implement blue-green deployment or rolling updates
+- Use Docker Swarm or Kubernetes for orchestration
+- OR use multiple instances behind a load balancer
+- OR implement health-aware deployment with overlap period
+
+**Effort**: Medium | **Impact**: High for production traffic
+
+#### 2. Centralized Logging
+**Goal**: Better debugging and audit trails
+**Current**: Logs only accessible via `docker logs` on server
+**Solution**:
+- Deploy Loki + Promtail for log aggregation
+- OR use a managed service like Datadog, New Relic, or CloudWatch
+- Configure log rotation and retention policies
+
+**Effort**: Low-Medium | **Impact**: High for troubleshooting
+
+#### 3. Application Monitoring & Metrics
+**Goal**: Proactive issue detection and performance insights
+**Current**: Only basic Docker health checks
+**Solution**:
+- Enable Prometheus + Grafana (already in docker-compose as comments)
+- Add application-level metrics (request rates, error rates, latency)
+- Set up uptime monitoring (UptimeRobot, StatusCake, etc.)
+- Configure alerting for critical issues
+
+**Effort**: Medium | **Impact**: High for production reliability
+
+#### 4. Automated Testing in Production
+**Goal**: Verify deployments beyond basic health checks
+**Current**: Only `/health` endpoint check
+**Solution**:
+- Add smoke tests after deployment (login, create item, fetch data)
+- Implement contract testing for API endpoints
+- Add end-to-end tests in staging environment
+
+**Effort**: Medium | **Impact**: Medium-High for catching regressions
+
+### Security Enhancements
+
+#### 5. Security Scanning
+**Goal**: Detect vulnerabilities in dependencies and images
+**Solution**:
+- Add Trivy or Snyk scanning in CI/CD pipeline
+- Scan Docker images before pushing to registry
+- Regular dependency updates via Dependabot
+
+**Effort**: Low | **Impact**: Medium for security posture
+
+#### 6. Secrets Management
+**Goal**: Better secret rotation and access control
+**Current**: Secrets in GitHub Secrets and .env files
+**Solution**:
+- Use HashiCorp Vault or AWS Secrets Manager
+- Implement automatic secret rotation
+- Audit secret access
+
+**Effort**: High | **Impact**: Medium for enterprises
+
+### Infrastructure Improvements
+
+#### 7. Database High Availability
+**Goal**: Prevent data loss and improve performance
+**Current**: Single SQLite file
+**Solution**:
+- Migrate to PostgreSQL (already prepared in docker-compose)
+- Set up automated offsite backups (S3, Backblaze B2)
+- Implement replication for read scaling
+
+**Effort**: Medium-High | **Impact**: High for data safety
+
+#### 8. CDN & Caching
+**Goal**: Faster page loads and reduced server load
+**Solution**:
+- Add Cloudflare or similar CDN in front of application
+- Implement Redis for session/data caching
+- Enable browser caching headers
+
+**Effort**: Low-Medium | **Impact**: Medium for user experience
+
+#### 9. Infrastructure as Code
+**Goal**: Reproducible and version-controlled infrastructure
+**Current**: Manual server setup
+**Solution**:
+- Use Terraform or Pulumi for server provisioning
+- Document infrastructure in code
+- Enable easy disaster recovery
+
+**Effort**: Medium-High | **Impact**: Medium for repeatability
+
+### Development Workflow
+
+#### 10. Staging Environment
+**Goal**: Test changes before production
+**Solution**:
+- Set up separate staging server/environment
+- Deploy automatically on PR creation
+- Run full test suite in staging
+
+**Effort**: Medium | **Impact**: High for confidence
+
+#### 11. Feature Flags
+**Goal**: Control feature rollout independently of deployments
+**Solution**:
+- Implement feature flag system (LaunchDarkly, Unleash, or custom)
+- Enable gradual rollouts and A/B testing
+- Quick feature disable without redeployment
+
+**Effort**: Medium | **Impact**: Medium for flexibility
+
+### Priority Recommendations
+
+**Start with these 3 for maximum impact with minimal effort:**
+
+1. **Application Monitoring** (Prometheus + Grafana) - Already prepared in docker-compose, just uncomment and configure
+2. **Centralized Logging** (Loki + Promtail) - Easy to add, huge benefit for debugging
+3. **Automated Offsite Backups** - Critical for data safety, low effort with cron + rclone
+
+**Next tier when traffic grows:**
+
+4. **PostgreSQL Migration** - Better performance and features
+5. **Staging Environment** - Catch issues before production
+6. **Zero-Downtime Deployments** - Essential for 24/7 operations
+
+### Implementation Notes
+
+- These improvements should be implemented incrementally based on actual needs
+- Don't over-engineer for future scale - add complexity when it solves real problems
+- Monitor the value/cost ratio - some improvements may not be worth it for smaller deployments
+- Keep things simple and maintainable
+
+For questions or suggestions on these improvements, open an issue in the repository.
+
+---
+
+**Last Updated**: 2025-10-29
+**Version**: 1.1
 **Status**: Production Ready

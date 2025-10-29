@@ -11,6 +11,10 @@ on:
       - main
   workflow_dispatch:  # Allow manual deployment trigger
 
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false  # Don't cancel running deployments
+
 jobs:
   tests:
     name: Run Tests
@@ -89,6 +93,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+      - name: Save Docker config for registry access
+        run: |
+          mkdir -p ~/.docker-config-temp
+          cp ~/.docker/config.json ~/.docker-config-temp/config.json
+
       - name: Ensure deployment directories exist
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -101,6 +110,7 @@ jobs:
             mkdir -p /opt/kj-inventory/scripts
             mkdir -p /opt/kj-inventory/data/backups
             mkdir -p /opt/kj-inventory/logs
+            mkdir -p ~/.docker
       - name: Upload deployment files
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -110,6 +120,17 @@ jobs:
           port: ${{ secrets.SERVER_PORT || 22 }}
           source: docker-compose.prod.yml,scripts/deploy.sh
           target: /opt/kj-inventory
+
+      - name: Upload Docker config for registry access
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: ~/.docker-config-temp/config.json
+          target: ~/.docker/
+          strip_components: 1
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -124,9 +145,6 @@ jobs:
 
             # Navigate to deployment directory
             cd /opt/kj-inventory || { echo "Deployment directory not found!"; exit 1; }
-
-            # Log in to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Run deployment script
             echo "Running deployment script..."
@@ -145,7 +163,15 @@ jobs:
           else
             echo "Deployment to production failed!"
             echo "Failed commit: ${{ github.sha }}"
+            echo ""
+            echo "DEPLOYMENT FAILED - Please check the logs above for details"
+            echo "The deployment has been rolled back to the previous version"
           fi
+
+      - name: Notify on deployment failure
+        if: failure()
+        run: |
+          echo "::error title=Deployment Failed::Deployment to production failed for commit ${{ github.sha }}. Check logs for details."
 
       - name: Create deployment summary
         if: always()

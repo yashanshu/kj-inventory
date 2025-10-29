@@ -75,13 +75,7 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	// Serve static files (React build)
-	if cfg.ServeStatic {
-		fileServer := http.FileServer(http.Dir("./frontend/dist/"))
-		r.Handle("/*", fileServer)
-	}
-
-	// Health check
+	// Health check (must be before static file handler)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -129,6 +123,12 @@ func main() {
 			r.Get("/items/{id}/movements", movementHandler.GetItemMovements)
 		})
 	})
+
+	// Serve static files (React build) - must be last to not catch API routes
+	if cfg.ServeStatic {
+		fileServer := http.FileServer(http.Dir("./frontend/dist/"))
+		r.Handle("/*", fileServer)
+	}
 
 	// Start server
 	srv := &http.Server{
