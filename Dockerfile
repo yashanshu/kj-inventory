@@ -2,7 +2,8 @@
 # Multi-stage build for minimal production image
 
 # Stage 1: Build Go backend
-FROM golang:1.23-alpine AS backend-builder
+# Use golang:1-alpine to automatically get latest Go version (including 1.24+)
+FROM golang:1-alpine AS backend-builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
