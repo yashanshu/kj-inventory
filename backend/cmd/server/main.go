@@ -126,8 +126,22 @@ func main() {
 
 	// Serve static files (React build) - must be last to not catch API routes
 	if cfg.ServeStatic {
-		fileServer := http.FileServer(http.Dir("./frontend/dist/"))
-		r.Handle("/*", fileServer)
+		// Custom handler for SPA routing
+		spaHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path := "./frontend/dist" + r.URL.Path
+
+			// Check if file exists
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				// File doesn't exist, serve index.html for client-side routing
+				http.ServeFile(w, r, "./frontend/dist/index.html")
+				return
+			}
+
+			// File exists, serve it
+			http.FileServer(http.Dir("./frontend/dist")).ServeHTTP(w, r)
+		})
+
+		r.Handle("/*", spaHandler)
 	}
 
 	// Start server
