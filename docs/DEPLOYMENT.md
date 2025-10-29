@@ -209,7 +209,27 @@ cat ~/.ssh/github_actions_kj
 
 ### Step 2: Enable GitHub Container Registry
 
-The first time you push, GitHub will create a container registry. After the first successful deployment:
+Follow GitHub's container registry authentication guide (<https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry>), then make sure the repository is configured accordingly:
+
+1. In your repository, go to **Settings → Actions → General** and under **Workflow permissions** choose **Read and write permissions**, then check **Allow GitHub Actions to create and approve pull requests**. This grants the default `GITHUB_TOKEN` the scopes required to push to `ghcr.io`.
+2. In the same **Settings** area (or at the organization level if this is an org repo), enable **Allow GitHub Actions to create and publish GitHub Packages**. Without this, the workflow run will fail with `installation not allowed to Create organization package`.
+3. Confirm the workflow file (`.github/workflows/deploy.yml`) contains:
+
+   ```yaml
+   permissions:
+     contents: read
+     packages: write
+   ```
+
+   These permissions align with GitHub’s guidance and unlock Docker pushes that use the workflow’s `GITHUB_TOKEN`.
+
+4. For manual `docker push` or troubleshooting outside Actions, create a classic PAT with at least `write:packages` scope (and enable SSO if required), then authenticate locally:
+
+   ```bash
+   echo $GHCR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+   ```
+
+After the first successful deployment GitHub will create the registry entry. You can then manage visibility at:
 
 1. Go to: `https://github.com/YOUR_USERNAME/YOUR_REPO/pkgs/container/YOUR_REPO`
 2. Change visibility to "Public" (recommended) or configure access tokens for private access
