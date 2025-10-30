@@ -5,7 +5,7 @@
 # Use golang:1-alpine to automatically get latest Go version (including 1.24+)
 FROM golang:1-alpine AS backend-builder
 
-RUN apk add --no-cache gcc musl-dev sqlite-dev wget
+RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 WORKDIR /app/backend
 
@@ -19,11 +19,10 @@ COPY backend/ .
 # Build the binary
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o server ./cmd/server
 
-# Download pre-built migrate binary (faster than building from source)
-RUN wget -O migrate.tar.gz https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz && \
-    tar xvzf migrate.tar.gz && \
-    mv migrate /usr/local/bin/migrate && \
-    rm migrate.tar.gz
+# Build migrate tool from source with sqlite3 support
+# First add the dependency temporarily (won't affect final image)
+RUN go install -tags 'sqlite3' github.com/golang-migrate/migrate/v4/cmd/migrate@latest && \
+    cp $(go env GOPATH)/bin/migrate /usr/local/bin/migrate
 
 # Stage 2: Build React frontend
 FROM node:20-alpine AS frontend-builder
