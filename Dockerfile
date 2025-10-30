@@ -56,7 +56,7 @@ WORKDIR /app
 COPY --from=backend-builder /app/backend/server .
 
 # Copy migrate tool with sqlite3 support
-COPY --from=backend-builder /app/backend/migrate /usr/local/bin/migrate
+COPY --from=backend-builder /usr/local/bin/migrate /usr/local/bin/migrate
 
 # Copy migrations (fix path)
 COPY --from=backend-builder /app/backend/migrations ./migrations
