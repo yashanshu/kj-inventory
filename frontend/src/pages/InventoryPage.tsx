@@ -5,8 +5,8 @@ import { useInventoryFilters } from '../hooks/useInventoryFilters';
 import { useCategoryMap } from '../hooks/useCategoryMap';
 import type { Item } from '../types/inventory';
 import { AddItemModal } from '../components/inventory/AddItemModal';
-import { QuickStockAdjust } from '../components/inventory/QuickStockAdjust';
 import { DesktopStockAdjust } from '../components/inventory/DesktopStockAdjust';
+import { BottomSheetStockAdjust } from '../components/inventory/BottomSheetStockAdjust';
 import { SearchBar } from '../components/inventory/SearchBar';
 import { CategoryFilter } from '../components/inventory/CategoryFilter';
 import { ItemRow } from '../components/inventory/ItemRow';
@@ -18,6 +18,7 @@ import { exportItemsToCSV, generateExportFilename } from '../utils/export';
 import { toast } from '../components/Toast';
 import { EditItemModal } from '../components/inventory/EditItemModal';
 import { CategoryManagerModal } from '../components/inventory/CategoryManagerModal';
+import { ActionMenu } from '../components/inventory/ActionMenu';
 import { useAuthStore } from '../store/authStore';
 import { canEditItems, canManageCategories, canViewUnitCost } from '../utils/roles';
 
@@ -37,16 +38,14 @@ export function InventoryPage() {
   const [useDesktopModal, setUseDesktopModal] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
-  const filteredItems = items || [];
-  // Total items is the number of items returned from the server
-  // Note: This may not be accurate for pagination if there are more items on other pages
-  const totalItems = filteredItems.length;
+  const filteredItems = items?.items || [];
+  const totalItems = items?.total || 0;
   const hasFilters = !!(filters.searchTerm || filters.selectedCategoryId || filters.lowStockOnly);
 
   const handleAdjustStock = (item: Item) => {
     setSelectedItem(item);
-    // Detect screen size - use desktop modal for large screens
-    setUseDesktopModal(window.innerWidth >= 1024);
+    // Detect screen size - use desktop modal for large screens, bottom sheet for mobile
+    setUseDesktopModal(window.innerWidth >= 768);
   };
 
   const handleEditItem = (item: Item) => {
@@ -83,15 +82,27 @@ export function InventoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
-        <div className="flex items-center space-x-3">
+
+        {/* Mobile: Dropdown Menu */}
+        <div className="md:hidden">
+          <ActionMenu
+            onAddItem={allowItemEdits ? handleAddItemClick : undefined}
+            onExport={totalItems > 0 ? handleExport : undefined}
+            onManageCategories={allowCategoryManagement ? () => setShowCategoryManager(true) : undefined}
+            showExport={totalItems > 0}
+            showManageCategories={allowCategoryManagement}
+          />
+        </div>
+
+        {/* Desktop: Individual Buttons */}
+        <div className="hidden md:flex items-center space-x-3">
           {allowCategoryManagement && (
             <button
               onClick={() => setShowCategoryManager(true)}
               className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
             >
               <FolderCog className="w-5 h-5" />
-              <span className="hidden sm:inline">Manage Categories</span>
-              <span className="sm:hidden">Categories</span>
+              <span>Manage Categories</span>
             </button>
           )}
           {totalItems > 0 && (
@@ -100,7 +111,7 @@ export function InventoryPage() {
               className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
             >
               <Download className="w-5 h-5" />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span>Export CSV</span>
             </button>
           )}
           {allowItemEdits && (
@@ -109,15 +120,14 @@ export function InventoryPage() {
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Add Item</span>
-              <span className="sm:hidden">Add</span>
+              <span>Add Item</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow p-4 space-y-4">
+      <div className="bg-white rounded-lg shadow p-3 sm:p-4 space-y-3 sm:space-y-4">
         <SearchBar
           value={filters.localSearchTerm}
           onChange={filters.setLocalSearchTerm}
@@ -137,7 +147,7 @@ export function InventoryPage() {
         )}
 
         {/* Additional Filters */}
-        <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t">
           <label className="flex items-center space-x-2 cursor-pointer">
             <input
               type="checkbox"
@@ -151,7 +161,7 @@ export function InventoryPage() {
           {hasFilters && (
             <button
               onClick={filters.resetFilters}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium self-start sm:self-auto"
             >
               Clear filters
             </button>
@@ -259,7 +269,7 @@ export function InventoryPage() {
               onClose={() => setSelectedItem(null)}
             />
           ) : (
-            <QuickStockAdjust item={selectedItem} onClose={() => setSelectedItem(null)} />
+            <BottomSheetStockAdjust item={selectedItem} onClose={() => setSelectedItem(null)} />
           )}
         </>
       )}

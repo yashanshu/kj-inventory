@@ -12,6 +12,7 @@ type ItemRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Item, error)
 	List(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Item, error)
 	ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error)
+	CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error)
 	Update(ctx context.Context, item *domain.Item) error
 	UpdateStock(ctx context.Context, id uuid.UUID, newStock int) error
 	CountByCategory(ctx context.Context, categoryID uuid.UUID) (int, error)

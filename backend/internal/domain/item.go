@@ -55,3 +55,8 @@ type BulkAdjustRequest struct {
 		Notes    *string   `json:"notes"`
 	} `json:"adjustments" validate:"required,min=1"`
 }
+
+type PaginatedItemsResponse struct {
+	Items []*Item `json:"items"`
+	Total int     `json:"total"`
+}

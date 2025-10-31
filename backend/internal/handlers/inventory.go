@@ -134,7 +134,7 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	// Parse lowStock filter
 	lowStockOnly := lowStock == "true"
 
-	items, err := h.inventoryService.ListItemsWithFilters(r.Context(), orgUUID, search, catUUID, lowStockOnly, limit, offset)
+	paginatedItems, err := h.inventoryService.ListItemsWithFiltersPaginated(r.Context(), orgUUID, search, catUUID, lowStockOnly, limit, offset)
 	if err != nil {
 		h.log.Error("Failed to list items", err)
 		utils.RespondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", nil)
@@ -142,7 +142,13 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role := getRoleFromContext(r.Context())
-	utils.RespondSuccess(w, http.StatusOK, sanitizeItemsForRole(items, role))
+	sanitizedItems := sanitizeItemsForRole(paginatedItems.Items, role)
+
+	response := domain.PaginatedItemsResponse{
+		Items: sanitizedItems,
+		Total: paginatedItems.Total,
+	}
+	utils.RespondSuccess(w, http.StatusOK, response)
 }
 
 func (h *InventoryHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {

@@ -194,6 +194,41 @@ func (r *itemRepoSQLite) ListWithFilters(ctx context.Context, orgID uuid.UUID, s
 	return items, rows.Err()
 }
 
+func (r *itemRepoSQLite) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM items
+		WHERE organization_id = ?`
+
+	args := []interface{}{orgID.String()}
+
+	// Add search filter
+	if search != "" {
+		query += ` AND (name LIKE ? OR sku LIKE ?)`
+		searchPattern := "%" + search + "%"
+		args = append(args, searchPattern, searchPattern)
+	}
+
+	// Add category filter
+	if categoryID != nil {
+		query += ` AND category_id = ?`
+		args = append(args, categoryID.String())
+	}
+
+	// Add low stock filter
+	if lowStockOnly {
+		query += ` AND track_stock = 1 AND current_stock <= minimum_threshold`
+	}
+
+	row := r.db.QueryRowContext(ctx, query, args...)
+
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *itemRepoSQLite) Update(ctx context.Context, item *domain.Item) error {
 	item.UpdatedAt = time.Now().UTC()
 	_, err := r.db.ExecContext(ctx, `

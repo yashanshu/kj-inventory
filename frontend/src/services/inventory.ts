@@ -13,12 +13,13 @@ import type {
   StockMovement,
   CreateMovementRequest,
   ListMovementsQuery,
+  PaginatedItemsResponse,
 } from '../types/inventory';
 
 export const inventoryService = {
   // Items
-  async getItems(query?: ListItemsQuery): Promise<Item[]> {
-    return apiClient.get<Item[]>('/items', query);
+  async getItems(query?: ListItemsQuery): Promise<PaginatedItemsResponse> {
+    return apiClient.get<PaginatedItemsResponse>('/items', query);
   },
 
   async getItem(id: string): Promise<Item> {

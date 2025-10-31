@@ -173,3 +173,8 @@ export interface ListMovementsQuery {
   limit?: number;
   offset?: number;
 }
+
+export interface PaginatedItemsResponse {
+  items: Item[];
+  total: number;
+}

@@ -20,7 +20,7 @@ export function useInventoryFilters() {
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
 
   // Debounce search term
   useEffect(() => {

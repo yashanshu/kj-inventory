@@ -128,16 +128,19 @@ func TestInventoryHandler_GetItems_RedactsUnitCostForNonAdmin(t *testing.T) {
 	}
 
 	var resp struct {
-		Data []domain.Item `json:"data"`
+		Data domain.PaginatedItemsResponse `json:"data"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected one item, got %d", len(resp.Data))
+	if len(resp.Data.Items) != 1 {
+		t.Fatalf("expected one item, got %d", len(resp.Data.Items))
 	}
-	if resp.Data[0].UnitCost != nil {
+	if resp.Data.Total != 1 {
+		t.Fatalf("expected total of 1, got %d", resp.Data.Total)
+	}
+	if resp.Data.Items[0].UnitCost != nil {
 		t.Fatalf("expected unitCost to be redacted for non-admin list response")
 	}
 }
@@ -192,6 +195,10 @@ func (s *stubItemRepo) List(ctx context.Context, orgID uuid.UUID, limit, offset 
 
 func (s *stubItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
 	return s.listWithFiltersItems, nil
+}
+
+func (s *stubItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+	return len(s.listWithFiltersItems), nil
 }
 
 func (s *stubItemRepo) Update(ctx context.Context, item *domain.Item) error {

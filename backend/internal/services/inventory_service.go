@@ -90,6 +90,24 @@ func (s *InventoryService) ListItemsWithFilters(ctx context.Context, orgID uuid.
 	return s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, lowStockOnly, limit, offset)
 }
 
+// ListItemsWithFiltersPaginated retrieves items with optional filters and returns total count
+func (s *InventoryService) ListItemsWithFiltersPaginated(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) (*domain.PaginatedItemsResponse, error) {
+	items, err := s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, lowStockOnly, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	total, err := s.itemRepo.CountWithFilters(ctx, orgID, search, categoryID, lowStockOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.PaginatedItemsResponse{
+		Items: items,
+		Total: total,
+	}, nil
+}
+
 // UpdateItem updates an existing item
 func (s *InventoryService) UpdateItem(ctx context.Context, item *domain.Item) error {
 	existing, err := s.itemRepo.GetByID(ctx, item.ID)
