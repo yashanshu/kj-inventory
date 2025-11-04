@@ -1,21 +1,34 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/google/uuid"
+	"hasufel.kj/internal/domain"
 	"hasufel.kj/internal/services"
 	"hasufel.kj/pkg/logger"
 	"hasufel.kj/pkg/utils"
 )
 
+// DashboardService interface for dependency injection
+type DashboardService interface {
+	GetMetrics(ctx context.Context, orgID uuid.UUID) (*services.DashboardMetrics, error)
+	GetRecentMovements(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.StockMovement, error)
+	GetStockTrends(ctx context.Context, orgID uuid.UUID, days int) ([]services.StockTrend, error)
+	GetCategoryBreakdown(ctx context.Context, orgID uuid.UUID) ([]services.CategoryBreakdown, error)
+	GetLowStockItems(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.Item, error)
+	GetAlerts(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.Alert, error)
+	MarkAlertAsRead(ctx context.Context, alertID uuid.UUID) error
+}
+
 type DashboardHandler struct {
-	dashboardService *services.DashboardService
+	dashboardService DashboardService
 	log              *logger.Logger
 }
 
-func NewDashboardHandler(dashboardService *services.DashboardService, log *logger.Logger) *DashboardHandler {
+func NewDashboardHandler(dashboardService DashboardService, log *logger.Logger) *DashboardHandler {
 	return &DashboardHandler{
 		dashboardService: dashboardService,
 		log:              log,

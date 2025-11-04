@@ -1,5 +1,6 @@
 import type { Item, Category } from '../../types/inventory';
 import { useStockStatus } from '../../hooks/useStockStatus';
+import { Edit2, Package } from 'lucide-react';
 
 interface ItemCardProps {
   item: Item;
@@ -71,20 +72,22 @@ export function ItemCard({
         )}
       </div>
 
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2">
         {canEdit && (
           <button
             onClick={() => onEdit(item)}
-            className="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+            className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 text-sm border border-indigo-200 text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 transition-colors"
           >
-            Edit
+            <Edit2 className="w-4 h-4" />
+            <span>Edit</span>
           </button>
         )}
         <button
           onClick={() => onAdjust(item)}
-          className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition-colors"
+          className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 transition-all"
         >
-          Adjust
+          <Package className="w-4 h-4" />
+          <span>Adjust</span>
         </button>
       </div>
     </div>

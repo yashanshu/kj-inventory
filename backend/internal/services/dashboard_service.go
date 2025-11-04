@@ -10,11 +10,11 @@ import (
 )
 
 type DashboardMetrics struct {
-	TotalItems           int     `json:"total_items"`
-	TotalValue           float64 `json:"total_value"`
-	LowStockItems        int     `json:"low_stock_items"`
-	OutOfStockItems      int     `json:"out_of_stock_items"`
-	RecentMovementsCount int     `json:"recent_movements_count"`
+	TotalItems      int     `json:"totalItems"`
+	TotalValue      float64 `json:"totalValue"`
+	LowStockCount   int     `json:"lowStockCount"`
+	OutOfStockCount int     `json:"outOfStockCount"`
+	RecentMovements int     `json:"recentMovements"`
 }
 
 type StockTrend struct {
@@ -60,8 +60,8 @@ func (s *DashboardService) GetMetrics(ctx context.Context, orgID uuid.UUID) (*Da
 		SELECT
 			COUNT(*) as total_items,
 			COALESCE(SUM(current_stock * COALESCE(unit_cost, 0)), 0) as total_value,
-			SUM(CASE WHEN track_stock = 1 AND current_stock < minimum_threshold AND current_stock > 0 THEN 1 ELSE 0 END) as low_stock,
-			SUM(CASE WHEN track_stock = 1 AND current_stock = 0 THEN 1 ELSE 0 END) as out_of_stock
+			COALESCE(SUM(CASE WHEN track_stock = 1 AND current_stock < minimum_threshold AND current_stock > 0 THEN 1 ELSE 0 END), 0) as low_stock,
+			COALESCE(SUM(CASE WHEN track_stock = 1 AND current_stock = 0 THEN 1 ELSE 0 END), 0) as out_of_stock
 		FROM items
 		WHERE organization_id = ? AND is_active = 1
 	`
@@ -69,8 +69,8 @@ func (s *DashboardService) GetMetrics(ctx context.Context, orgID uuid.UUID) (*Da
 	err := s.db.QueryRowContext(ctx, query, orgID.String()).Scan(
 		&metrics.TotalItems,
 		&metrics.TotalValue,
-		&metrics.LowStockItems,
-		&metrics.OutOfStockItems,
+		&metrics.LowStockCount,
+		&metrics.OutOfStockCount,
 	)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (s *DashboardService) GetMetrics(ctx context.Context, orgID uuid.UUID) (*Da
 		AND sm.created_at >= datetime('now', '-7 days')
 	`
 
-	err = s.db.QueryRowContext(ctx, movementQuery, orgID.String()).Scan(&metrics.RecentMovementsCount)
+	err = s.db.QueryRowContext(ctx, movementQuery, orgID.String()).Scan(&metrics.RecentMovements)
 	if err != nil {
 		return nil, err
 	}

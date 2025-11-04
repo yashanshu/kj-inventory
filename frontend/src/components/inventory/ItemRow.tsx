@@ -1,5 +1,6 @@
 import type { Item, Category } from '../../types/inventory';
 import { useStockStatus } from '../../hooks/useStockStatus';
+import { Edit2, Package } from 'lucide-react';
 
 interface ItemRowProps {
   item: Item;
@@ -62,20 +63,22 @@ export function ItemRow({
         </td>
       )}
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex items-center justify-end space-x-4">
+        <div className="flex items-center justify-end space-x-2">
           {canEdit && (
             <button
               onClick={() => onEdit(item)}
-              className="text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center space-x-1.5 px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
             >
-              Edit
+              <Edit2 className="w-4 h-4" />
+              <span>Edit</span>
             </button>
           )}
           <button
             onClick={() => onAdjust(item)}
-            className="text-blue-600 hover:text-blue-900 font-medium transition-colors"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium transition-all"
           >
-            Adjust Stock
+            <Package className="w-4 h-4" />
+            <span>Adjust Stock</span>
           </button>
         </div>
       </td>

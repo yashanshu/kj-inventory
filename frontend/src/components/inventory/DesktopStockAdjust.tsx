@@ -166,7 +166,7 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
                     onClick={() => setMovementType('ADJUSTMENT')}
                     className={`px-4 py-3 rounded-lg font-medium transition-colors ${
                       movementType === 'ADJUSTMENT'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -187,7 +187,7 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     autoFocus
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg"
                     placeholder="Enter quantity"
                   />
                   <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
@@ -265,7 +265,7 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
                                   ? 'bg-green-100 text-green-800'
                                   : movement.movementType === 'OUT'
                                   ? 'bg-red-100 text-red-800'
-                                  : 'bg-blue-100 text-blue-800'
+                                  : 'bg-indigo-100 text-indigo-800'
                               }`}
                             >
                               {movement.movementType === 'IN' && <TrendingUp className="w-3 h-3 mr-1" />}
@@ -310,14 +310,14 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
             <button
               onClick={onClose}
               disabled={createMovement.isPending}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 disabled:opacity-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={createMovement.isPending || !quantity}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 shadow-md transition-all"
             >
               {createMovement.isPending ? 'Adjusting...' : 'Adjust Stock'}
             </button>

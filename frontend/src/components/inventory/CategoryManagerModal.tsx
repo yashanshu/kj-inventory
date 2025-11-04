@@ -169,7 +169,7 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                 placeholder="Description (optional)"
                 value={addForm.description}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <div className="flex items-center space-x-2">
                 <input
@@ -182,7 +182,7 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                 <button
                   type="submit"
                   disabled={createCategory.isPending}
-                  className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="inline-flex items-center justify-center px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 transition-all"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -220,7 +220,7 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                     <div className="flex items-center space-x-3">
                       <button
                         onClick={() => setEditingCategory(category)}
-                        className="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+                        className="inline-flex items-center px-3 py-2 text-sm border border-indigo-200 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors"
                       >
                         <Pencil className="w-4 h-4 mr-2" />
                         Edit
@@ -255,21 +255,21 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                   placeholder="Category name"
                   value={editForm.name}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <input
                   type="text"
                   placeholder="Description"
                   value={editForm.description}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <input
                   type="text"
                   placeholder="#color"
                   value={editForm.color}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, color: e.target.value }))}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div className="flex items-center justify-end space-x-3">
@@ -279,14 +279,14 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                     setEditingCategory(null);
                     setEditForm(initialFormState);
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                  className="px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updateCategory.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 shadow-md transition-all"
                 >
                   {updateCategory.isPending ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -311,7 +311,7 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                   onChange={(e) =>
                     setDeleteState((prev) => ({ ...prev, targetCategoryId: e.target.value }))
                   }
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Do not reassign items</option>
                   {selectableReassignmentTargets.map((category) => (
@@ -327,7 +327,7 @@ export function CategoryManagerModal({ categories = [], onClose }: CategoryManag
                       setIsDeleteDialogOpen(false);
                       setDeleteState({ category: null, targetCategoryId: '' });
                     }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                    className="px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
                   >
                     Cancel
                   </button>

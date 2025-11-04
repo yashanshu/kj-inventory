@@ -85,7 +85,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -98,7 +98,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                 type="text"
                 value={formData.sku}
                 onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
@@ -110,7 +110,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                 required
                 value={formData.categoryId}
                 onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Select category</option>
                 {categories.map((category) => (
@@ -130,7 +130,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                   required
                   value={formData.unit}
                   onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="pcs">Pieces</option>
                   <option value="kg">Kilograms</option>
@@ -148,7 +148,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                   required
                   value={formData.minimumThreshold}
                   onChange={(e) => setFormData({ ...formData, minimumThreshold: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -171,7 +171,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                   min="0"
                   value={formData.unitCost}
                   onChange={(e) => setFormData({ ...formData, unitCost: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -182,7 +182,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                   type="checkbox"
                   checked={formData.trackStock}
                   onChange={(e) => setFormData({ ...formData, trackStock: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                 />
                 <span>Track low stock alerts</span>
               </label>
@@ -195,7 +195,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
                   type="checkbox"
                   checked={formData.isActive}
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                 />
                 <span>Active item</span>
               </label>
@@ -208,7 +208,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
             type="button"
             onClick={onClose}
             disabled={updateItem.isPending}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 disabled:opacity-50"
+            className="px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 disabled:opacity-50 transition-colors"
           >
             Cancel
           </button>
@@ -216,7 +216,7 @@ export function EditItemModal({ item, categories = [], onClose }: EditItemModalP
             type="submit"
             form="edit-item-form"
             disabled={updateItem.isPending}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 shadow-md transition-all"
           >
             {updateItem.isPending ? 'Saving...' : 'Save Changes'}
           </button>

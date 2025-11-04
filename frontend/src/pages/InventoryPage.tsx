@@ -81,7 +81,7 @@ export function InventoryPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Inventory</h1>
 
         {/* Mobile: Dropdown Menu */}
         <div className="md:hidden">
@@ -99,7 +99,7 @@ export function InventoryPage() {
           {allowCategoryManagement && (
             <button
               onClick={() => setShowCategoryManager(true)}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
             >
               <FolderCog className="w-5 h-5" />
               <span>Manage Categories</span>
@@ -108,7 +108,7 @@ export function InventoryPage() {
           {totalItems > 0 && (
             <button
               onClick={handleExport}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="flex items-center space-x-2 px-4 py-2 border border-purple-200 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
             >
               <Download className="w-5 h-5" />
               <span>Export CSV</span>
@@ -117,7 +117,7 @@ export function InventoryPage() {
           {allowItemEdits && (
             <button
               onClick={handleAddItemClick}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all"
             >
               <Plus className="w-5 h-5" />
               <span>Add Item</span>
@@ -153,7 +153,7 @@ export function InventoryPage() {
               type="checkbox"
               checked={filters.lowStockOnly}
               onChange={filters.handleLowStockToggle}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
             />
             <span className="text-sm text-gray-700">Low stock only</span>
           </label>
@@ -161,7 +161,7 @@ export function InventoryPage() {
           {hasFilters && (
             <button
               onClick={filters.resetFilters}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium self-start sm:self-auto"
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium self-start sm:self-auto"
             >
               Clear filters
             </button>
@@ -197,26 +197,26 @@ export function InventoryPage() {
           {/* Desktop: Table View */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gradient-to-r from-indigo-50 to-purple-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
                     Item
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
                     Stock
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
                     Status
                   </th>
                   {showUnitCost && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
                       Unit Cost
                     </th>
                   )}
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-indigo-900 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -269,7 +269,7 @@ export function InventoryPage() {
               onClose={() => setSelectedItem(null)}
             />
           ) : (
-            <BottomSheetStockAdjust item={selectedItem} onClose={() => setSelectedItem(null)} />
+            <BottomSheetStockAdjust item={selectedItem} open={!!selectedItem} onClose={() => setSelectedItem(null)} />
           )}
         </>
       )}

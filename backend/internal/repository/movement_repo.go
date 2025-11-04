@@ -128,7 +128,10 @@ func (r *movementRepoSQLite) ListRecent(ctx context.Context, orgID uuid.UUID, li
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT sm.id, sm.item_id, sm.movement_type, sm.quantity,
 		       sm.previous_stock, sm.new_stock, sm.reference, sm.notes,
-		       sm.created_by, sm.created_at
+		       sm.created_by, sm.created_at,
+		       i.id, i.organization_id, i.category_id, i.name, i.sku,
+		       i.unit_of_measurement, i.minimum_threshold, i.current_stock,
+		       i.unit_cost, i.is_active, i.track_stock, i.created_at, i.updated_at
 		FROM stock_movements sm
 		JOIN items i ON sm.item_id = i.id
 		WHERE i.organization_id = ?
@@ -140,7 +143,7 @@ func (r *movementRepoSQLite) ListRecent(ctx context.Context, orgID uuid.UUID, li
 	}
 	defer rows.Close()
 
-	return r.scanMovements(rows)
+	return r.scanMovementsWithItems(rows)
 }
 
 // scanMovements is a helper function to scan multiple movement rows
@@ -170,6 +173,61 @@ func (r *movementRepoSQLite) scanMovements(rows *sql.Rows) ([]*domain.StockMovem
 		if notes.Valid {
 			mv.Notes = &notes.String
 		}
+		movements = append(movements, &mv)
+	}
+
+	return movements, rows.Err()
+}
+
+// scanMovementsWithItems is a helper function to scan movement rows with joined item data
+func (r *movementRepoSQLite) scanMovementsWithItems(rows *sql.Rows) ([]*domain.StockMovement, error) {
+	var movements []*domain.StockMovement
+	for rows.Next() {
+		var mv domain.StockMovement
+		var item domain.Item
+		var (
+			mvIDStr, itemIDStr, createdByStr                     string
+			itemOrgIDStr, itemCatIDStr                           string
+			reference, notes, itemSKU                            sql.NullString
+			itemUnitCost                                         sql.NullFloat64
+			itemIsActive, itemTrackStock                         bool
+		)
+
+		if err := rows.Scan(
+			&mvIDStr, &itemIDStr, &mv.MovementType, &mv.Quantity,
+			&mv.PreviousStock, &mv.NewStock, &reference, &notes,
+			&createdByStr, &mv.CreatedAt,
+			&itemIDStr, &itemOrgIDStr, &itemCatIDStr, &item.Name, &itemSKU,
+			&item.UnitOfMeasurement, &item.MinimumThreshold, &item.CurrentStock,
+			&itemUnitCost, &itemIsActive, &itemTrackStock, &item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		mv.ID, _ = uuid.Parse(mvIDStr)
+		mv.ItemID, _ = uuid.Parse(itemIDStr)
+		mv.CreatedBy, _ = uuid.Parse(createdByStr)
+		if reference.Valid {
+			mv.Reference = &reference.String
+		}
+		if notes.Valid {
+			mv.Notes = &notes.String
+		}
+
+		// Parse item fields
+		item.ID, _ = uuid.Parse(itemIDStr)
+		item.OrganizationID, _ = uuid.Parse(itemOrgIDStr)
+		item.CategoryID, _ = uuid.Parse(itemCatIDStr)
+		if itemSKU.Valid {
+			item.SKU = &itemSKU.String
+		}
+		if itemUnitCost.Valid {
+			item.UnitCost = &itemUnitCost.Float64
+		}
+		item.IsActive = itemIsActive
+		item.TrackStock = itemTrackStock
+
+		mv.Item = &item
 		movements = append(movements, &mv)
 	}
 

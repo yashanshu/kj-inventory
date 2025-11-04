@@ -152,7 +152,7 @@ function MetricCard({ title, value, icon: Icon, color, isMonetary = false }: Met
   };
 
   const formattedValue = isMonetary
-    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(value)
+    ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(value)
     : value.toLocaleString();
 
   return (
