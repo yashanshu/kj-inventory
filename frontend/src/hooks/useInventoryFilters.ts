@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useInventoryStore } from '../store/inventoryStore';
 
 export interface InventoryFilters {
@@ -10,6 +11,7 @@ export interface InventoryFilters {
 }
 
 export function useInventoryFilters() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     searchTerm,
     setSearchTerm,
@@ -18,9 +20,21 @@ export function useInventoryFilters() {
   } = useInventoryStore();
 
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
-  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [lowStockOnly, setLowStockOnly] = useState(() => {
+    // Initialize from URL parameter if present
+    return searchParams.get('lowStock') === 'true';
+  });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // Clear URL parameter after reading it on mount
+  useEffect(() => {
+    if (searchParams.has('lowStock')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('lowStock');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, []);
 
   // Debounce search term
   useEffect(() => {

@@ -57,7 +57,7 @@ export function DashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Low Stock Items</h2>
           {!lowStockLoading && lowStockItems && lowStockItems.length > 0 && (
-            <Link to="/inventory" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            <Link to="/inventory?lowStock=true" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
               View all
             </Link>
           )}
