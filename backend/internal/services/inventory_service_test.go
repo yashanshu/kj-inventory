@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 	"hasufel.kj/internal/domain"
 	"hasufel.kj/internal/services"
@@ -229,5 +230,202 @@ func TestInventoryService_ListItemsWithFiltersPaginated_EmptyResults(t *testing.
 
 	if result.Total != 0 {
 		t.Errorf("expected total 0, got %d", result.Total)
+	}
+}
+
+// mockItemRepoWithStock is a mock repository that tracks stock changes
+type mockItemRepoWithStock struct {
+	item *domain.Item
+}
+
+func (m *mockItemRepoWithStock) Create(ctx context.Context, item *domain.Item) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+
+func (m *mockItemRepoWithStock) GetByID(ctx context.Context, id uuid.UUID) (*domain.Item, error) {
+	if m.item != nil && m.item.ID == id {
+		return m.item, nil
+	}
+	return nil, services.ErrItemNotFound
+}
+
+func (m *mockItemRepoWithStock) List(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Item, error) {
+	return []*domain.Item{}, nil
+}
+
+func (m *mockItemRepoWithStock) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+	return []*domain.Item{}, nil
+}
+
+func (m *mockItemRepoWithStock) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+	return 0, nil
+}
+
+func (m *mockItemRepoWithStock) Update(ctx context.Context, item *domain.Item) error {
+	return nil
+}
+
+func (m *mockItemRepoWithStock) UpdateStock(ctx context.Context, id uuid.UUID, newStock int) error {
+	if m.item != nil && m.item.ID == id {
+		m.item.CurrentStock = newStock
+		return nil
+	}
+	return services.ErrItemNotFound
+}
+
+func (m *mockItemRepoWithStock) CountByCategory(ctx context.Context, categoryID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *mockItemRepoWithStock) ReassignCategory(ctx context.Context, fromCategoryID, toCategoryID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockItemRepoWithStock) Delete(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+func TestInventoryService_AdjustStock_ShouldSetExactValue(t *testing.T) {
+	ctx := context.Background()
+	orgID := uuid.New()
+	itemID := uuid.New()
+	userID := uuid.New()
+
+	// Create an item with initial stock of 100
+	item := &domain.Item{
+		ID:               itemID,
+		OrganizationID:   orgID,
+		Name:             "Test Item",
+		CurrentStock:     100,
+		MinimumThreshold: 10,
+		TrackStock:       true,
+	}
+
+	// Create a mock database with sqlmock
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	// Expect transaction to begin and commit
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+
+	mockItemRepo := &mockItemRepoWithStock{item: item}
+	service := services.NewInventoryService(
+		mockItemRepo,
+		&mockCategoryRepo{},
+		&mockMovementRepo{},
+		&mockAlertRepo{},
+		db,
+	)
+
+	// Test case: Adjust stock to 50 (should set to 50, not add 50)
+	movement, err := service.AdjustStock(
+		ctx,
+		itemID,
+		domain.MovementTypeAdjustment,
+		50,
+		userID,
+		nil,
+		nil,
+	)
+
+	if err != nil {
+		t.Fatalf("AdjustStock failed: %v", err)
+	}
+
+	if movement == nil {
+		t.Fatal("expected non-nil movement")
+	}
+
+	// The new stock should be 50, not 150 (100 + 50)
+	if movement.NewStock != 50 {
+		t.Errorf("expected new stock to be 50 (exact value), got %d", movement.NewStock)
+	}
+
+	if movement.PreviousStock != 100 {
+		t.Errorf("expected previous stock to be 100, got %d", movement.PreviousStock)
+	}
+
+	// Verify the item's current stock was updated to 50
+	if item.CurrentStock != 50 {
+		t.Errorf("expected item current stock to be 50, got %d", item.CurrentStock)
+	}
+
+	// Ensure all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestInventoryService_AdjustStock_ShouldHandleZeroAdjustment(t *testing.T) {
+	ctx := context.Background()
+	orgID := uuid.New()
+	itemID := uuid.New()
+	userID := uuid.New()
+
+	// Create an item with initial stock of 100
+	item := &domain.Item{
+		ID:               itemID,
+		OrganizationID:   orgID,
+		Name:             "Test Item",
+		CurrentStock:     100,
+		MinimumThreshold: 10,
+		TrackStock:       true,
+	}
+
+	// Create a mock database with sqlmock
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	// Expect transaction to begin and commit
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+
+	mockItemRepo := &mockItemRepoWithStock{item: item}
+	service := services.NewInventoryService(
+		mockItemRepo,
+		&mockCategoryRepo{},
+		&mockMovementRepo{},
+		&mockAlertRepo{},
+		db,
+	)
+
+	// Test case: Adjust stock to 0 (should be allowed for adjustment type)
+	movement, err := service.AdjustStock(
+		ctx,
+		itemID,
+		domain.MovementTypeAdjustment,
+		0,
+		userID,
+		nil,
+		nil,
+	)
+
+	if err != nil {
+		t.Fatalf("AdjustStock failed: %v", err)
+	}
+
+	if movement == nil {
+		t.Fatal("expected non-nil movement")
+	}
+
+	// The new stock should be 0
+	if movement.NewStock != 0 {
+		t.Errorf("expected new stock to be 0, got %d", movement.NewStock)
+	}
+
+	if item.CurrentStock != 0 {
+		t.Errorf("expected item current stock to be 0, got %d", item.CurrentStock)
+	}
+
+	// Ensure all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }

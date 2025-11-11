@@ -54,8 +54,12 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
 
   const handleSubmit = async () => {
     const qty = parseInt(quantity);
-    if (isNaN(qty) || qty <= 0) {
+    if (isNaN(qty) || qty < 0) {
       toast.error('Please enter a valid quantity');
+      return;
+    }
+    if (movementType !== 'ADJUSTMENT' && qty <= 0) {
+      toast.error('Quantity must be greater than 0 for Stock In/Out');
       return;
     }
 
@@ -178,23 +182,24 @@ export function DesktopStockAdjust({ item, onClose }: DesktopStockAdjustProps) {
               {/* Quantity Input */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity <span className="text-red-500">*</span>
+                  {movementType === 'ADJUSTMENT' ? 'New Stock Value' : 'Quantity'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type="number"
-                    min="1"
+                    min={movementType === 'ADJUSTMENT' ? '0' : '1'}
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     autoFocus
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg"
-                    placeholder="Enter quantity"
+                    placeholder={movementType === 'ADJUSTMENT' ? 'Enter exact stock value' : 'Enter quantity'}
                   />
                   <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
                     {item.unit}
                   </span>
                 </div>
-                {quantity && !isNaN(parseInt(quantity)) && (
+                {quantity !== '' && !isNaN(parseInt(quantity)) && (
                   <p className="text-sm text-gray-600 mt-2">
                     New stock will be:{' '}
                     <span className="font-semibold">

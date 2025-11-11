@@ -87,7 +87,8 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
 
   const decrementQuantity = () => {
     const current = quantity || 0;
-    if (current > 1) {
+    const minValue = movementType === 'ADJUSTMENT' ? 0 : 1;
+    if (current > minValue) {
       setValue('quantity', current - 1, { shouldValidate: true });
     }
   };
@@ -97,7 +98,7 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
       ? item.currentStock + (quantity || 0)
       : movementType === 'OUT'
       ? Math.max(0, item.currentStock - (quantity || 0))
-      : quantity || item.currentStock;
+      : quantity !== undefined && quantity !== null ? quantity : item.currentStock;
 
   return (
     <Drawer.Root open={open} onClose={handleClose}>
@@ -178,7 +179,7 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
             {/* Custom Adjustment */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Custom Amount
+                {movementType === 'ADJUSTMENT' ? 'Set Stock Value' : 'Custom Amount'}
               </label>
 
               {/* Movement Type Pills */}
@@ -224,13 +225,13 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
                   type="button"
                   onClick={decrementQuantity}
                   className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-xl active:bg-gray-200 disabled:opacity-50"
-                  disabled={quantity <= 1}
+                  disabled={movementType === 'ADJUSTMENT' ? quantity <= 0 : quantity <= 1}
                 >
                   <Minus className="w-5 h-5 text-gray-700" />
                 </button>
                 <input
                   type="number"
-                  min="1"
+                  min={movementType === 'ADJUSTMENT' ? '0' : '1'}
                   {...register('quantity', { valueAsNumber: true })}
                   className="flex-1 min-w-0 text-center text-2xl font-bold px-2 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
                   placeholder="0"
@@ -250,7 +251,7 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
               )}
 
               {/* Preview */}
-              {quantity && !isNaN(quantity) && (
+              {quantity !== undefined && quantity !== null && !isNaN(quantity) && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-xl">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">New stock will be:</span>
@@ -285,7 +286,13 @@ export function BottomSheetStockAdjust({ item, open, onClose }: BottomSheetStock
             <button
               type="submit"
               onClick={handleSubmit(onSubmit)}
-              disabled={createMovement.isPending || !quantity || quantity <= 0}
+              disabled={
+                createMovement.isPending ||
+                quantity === undefined ||
+                quantity === null ||
+                (movementType !== 'ADJUSTMENT' && quantity <= 0) ||
+                (movementType === 'ADJUSTMENT' && quantity < 0)
+              }
               className="w-full px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-semibold text-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 transition-all"
             >
               {createMovement.isPending ? 'Adjusting...' : 'Confirm Adjustment'}

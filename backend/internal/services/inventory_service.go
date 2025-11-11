@@ -166,7 +166,12 @@ func (s *InventoryService) DeleteItem(ctx context.Context, id uuid.UUID) error {
 
 // AdjustStock adjusts the stock for an item with transaction support
 func (s *InventoryService) AdjustStock(ctx context.Context, itemID uuid.UUID, movementType domain.MovementType, quantity int, userID uuid.UUID, reference, notes *string) (*domain.StockMovement, error) {
-	if quantity <= 0 {
+	// For ADJUSTMENT type, quantity represents the exact new stock value (can be 0 or positive)
+	// For IN/OUT types, quantity must be positive
+	if movementType != domain.MovementTypeAdjustment && quantity <= 0 {
+		return nil, ErrInvalidQuantity
+	}
+	if movementType == domain.MovementTypeAdjustment && quantity < 0 {
 		return nil, ErrInvalidQuantity
 	}
 
@@ -191,13 +196,16 @@ func (s *InventoryService) AdjustStock(ctx context.Context, itemID uuid.UUID, mo
 
 	// Calculate new stock based on movement type
 	switch movementType {
-	case domain.MovementTypeIn, domain.MovementTypeAdjustment:
+	case domain.MovementTypeIn:
 		newStock = previousStock + quantity
 	case domain.MovementTypeOut:
 		if previousStock < quantity {
 			return nil, ErrInsufficientStock
 		}
 		newStock = previousStock - quantity
+	case domain.MovementTypeAdjustment:
+		// For adjustments, quantity is the exact new stock value, not a delta
+		newStock = quantity
 	default:
 		return nil, fmt.Errorf("invalid movement type: %s", movementType)
 	}

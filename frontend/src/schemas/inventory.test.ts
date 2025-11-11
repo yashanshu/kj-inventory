@@ -4,6 +4,7 @@ import {
   editItemSchema,
   stockAdjustmentSchema,
   categorySchema,
+  stockMovementSchema,
 } from './inventory';
 
 describe('Inventory Schemas', () => {
@@ -220,6 +221,99 @@ describe('Inventory Schemas', () => {
 
       const result = categorySchema.safeParse(validData);
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('stockMovementSchema', () => {
+    it('should validate IN movement with positive quantity', () => {
+      const validData = {
+        movementType: 'IN' as const,
+        quantity: 10,
+        notes: 'Restocking',
+      };
+
+      const result = stockMovementSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate OUT movement with positive quantity', () => {
+      const validData = {
+        movementType: 'OUT' as const,
+        quantity: 5,
+        notes: 'Sold',
+      };
+
+      const result = stockMovementSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate ADJUSTMENT movement with positive quantity', () => {
+      const validData = {
+        movementType: 'ADJUSTMENT' as const,
+        quantity: 50,
+        notes: 'Stock count correction',
+      };
+
+      const result = stockMovementSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should allow ADJUSTMENT movement with zero quantity', () => {
+      const validData = {
+        movementType: 'ADJUSTMENT' as const,
+        quantity: 0,
+        notes: 'Out of stock',
+      };
+
+      const result = stockMovementSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject IN movement with zero quantity', () => {
+      const invalidData = {
+        movementType: 'IN' as const,
+        quantity: 0,
+        notes: 'Test',
+      };
+
+      const result = stockMovementSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('greater than 0');
+      }
+    });
+
+    it('should reject OUT movement with zero quantity', () => {
+      const invalidData = {
+        movementType: 'OUT' as const,
+        quantity: 0,
+        notes: 'Test',
+      };
+
+      const result = stockMovementSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('greater than 0');
+      }
+    });
+
+    it('should reject negative quantity for all movement types', () => {
+      const invalidDataIn = {
+        movementType: 'IN' as const,
+        quantity: -5,
+      };
+      const invalidDataOut = {
+        movementType: 'OUT' as const,
+        quantity: -5,
+      };
+      const invalidDataAdjustment = {
+        movementType: 'ADJUSTMENT' as const,
+        quantity: -5,
+      };
+
+      expect(stockMovementSchema.safeParse(invalidDataIn).success).toBe(false);
+      expect(stockMovementSchema.safeParse(invalidDataOut).success).toBe(false);
+      expect(stockMovementSchema.safeParse(invalidDataAdjustment).success).toBe(false);
     });
   });
 });

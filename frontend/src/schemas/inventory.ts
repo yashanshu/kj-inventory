@@ -137,19 +137,34 @@ export const movementTypeSchema = z.enum(['IN', 'OUT', 'ADJUSTMENT'], {
 });
 
 // Stock Movement Form Schema (for bottom sheet)
-export const stockMovementSchema = z.object({
-  movementType: movementTypeSchema,
+export const stockMovementSchema = z
+  .object({
+    movementType: movementTypeSchema,
 
-  quantity: z
-    .number({ message: 'Quantity must be a number' })
-    .int('Quantity must be a whole number')
-    .positive('Quantity must be greater than 0'),
+    quantity: z
+      .number({ message: 'Quantity must be a number' })
+      .int('Quantity must be a whole number')
+      .min(0, 'Quantity cannot be negative'),
 
-  notes: z
-    .string()
-    .max(500, 'Notes must be less than 500 characters')
-    .optional()
-    .or(z.literal('')),
-});
+    notes: z
+      .string()
+      .max(500, 'Notes must be less than 500 characters')
+      .optional()
+      .or(z.literal('')),
+  })
+  .refine(
+    (data) => {
+      // For IN and OUT, quantity must be > 0
+      // For ADJUSTMENT, quantity can be >= 0 (allows setting stock to 0)
+      if (data.movementType === 'IN' || data.movementType === 'OUT') {
+        return data.quantity > 0;
+      }
+      return true;
+    },
+    {
+      message: 'Quantity must be greater than 0 for Stock In/Out',
+      path: ['quantity'],
+    }
+  );
 
 export type StockMovementFormData = z.infer<typeof stockMovementSchema>;
