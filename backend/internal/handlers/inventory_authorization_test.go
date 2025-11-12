@@ -53,10 +53,11 @@ func TestInventoryHandler_CreateItem_RequiresAdmin(t *testing.T) {
 func TestInventoryHandler_GetItem_RedactsUnitCostForNonAdmin(t *testing.T) {
 	cost := 12.34
 	item := &domain.Item{
-		ID:         uuid.New(),
-		Name:       "Costly Item",
-		UnitCost:   &cost,
-		CategoryID: uuid.New(),
+		ID:                uuid.New(),
+		Name:              "Costly Item",
+		UnitCost:          &cost,
+		CategoryID:        uuid.New(),
+		UnitOfMeasurement: "pcs",
 	}
 
 	itemRepo := &stubItemRepo{getByIDItem: item}
@@ -98,11 +99,12 @@ func TestInventoryHandler_GetItem_RedactsUnitCostForNonAdmin(t *testing.T) {
 func TestInventoryHandler_GetItems_RedactsUnitCostForNonAdmin(t *testing.T) {
 	cost := 55.0
 	item := &domain.Item{
-		ID:             uuid.New(),
-		OrganizationID: uuid.New(),
-		CategoryID:     uuid.New(),
-		Name:           "Sample",
-		UnitCost:       &cost,
+		ID:                uuid.New(),
+		OrganizationID:    uuid.New(),
+		CategoryID:        uuid.New(),
+		Name:              "Sample",
+		UnitCost:          &cost,
+		UnitOfMeasurement: "pcs",
 	}
 
 	itemRepo := &stubItemRepo{
