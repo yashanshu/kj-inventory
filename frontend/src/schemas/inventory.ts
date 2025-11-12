@@ -33,12 +33,10 @@ export const addItemSchema = z.object({
 
   currentStock: z
     .number({ message: 'Stock must be a number' })
-    .int('Stock must be a whole number')
     .min(0, 'Stock cannot be negative'),
 
   minimumThreshold: z
     .number({ message: 'Threshold must be a number' })
-    .int('Threshold must be a whole number')
     .min(0, 'Threshold cannot be negative'),
 
   unitCost: z
@@ -75,7 +73,6 @@ export const editItemSchema = z.object({
 
   minimumThreshold: z
     .number({ message: 'Threshold must be a number' })
-    .int('Threshold must be a whole number')
     .min(0, 'Threshold cannot be negative'),
 
   unitCost: z
@@ -95,7 +92,6 @@ export type EditItemFormData = z.infer<typeof editItemSchema>;
 export const stockAdjustmentSchema = z.object({
   adjustment: z
     .number({ message: 'Adjustment must be a number' })
-    .int('Adjustment must be a whole number')
     .refine(
       (val) => val !== 0,
       { message: 'Adjustment cannot be zero' }
@@ -143,7 +139,6 @@ export const stockMovementSchema = z
 
     quantity: z
       .number({ message: 'Quantity must be a number' })
-      .int('Quantity must be a whole number')
       .min(0, 'Quantity cannot be negative'),
 
     notes: z

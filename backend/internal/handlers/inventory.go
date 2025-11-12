@@ -12,6 +12,7 @@ import (
 	"hasufel.kj/internal/domain"
 	"hasufel.kj/internal/services"
 	"hasufel.kj/pkg/logger"
+	"hasufel.kj/pkg/units"
 	"hasufel.kj/pkg/utils"
 )
 
@@ -41,9 +42,36 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req domain.CreateItemRequest
+	// Decode display request (with float64 values from frontend)
+	var req domain.CreateItemRequestDisplay
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", nil)
+		return
+	}
+
+	// Validate unit
+	if err := units.Validate(req.UnitOfMeasurement); err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "INVALID_UNIT", "Invalid unit of measurement", nil)
+		return
+	}
+
+	// Convert display values to base units
+	currentStockBase, err := units.ToBaseUnit(req.CurrentStock, req.UnitOfMeasurement)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "INVALID_STOCK", "Invalid stock value", nil)
+		return
+	}
+
+	thresholdBase, err := units.ToBaseUnit(req.MinimumThreshold, req.UnitOfMeasurement)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "INVALID_THRESHOLD", "Invalid threshold value", nil)
+		return
+	}
+
+	// Parse category ID
+	categoryUUID, err := uuid.Parse(req.CategoryID)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "INVALID_CATEGORY_ID", "Invalid category ID", nil)
 		return
 	}
 
@@ -54,12 +82,12 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 
 	item := &domain.Item{
 		OrganizationID:    orgUUID,
-		CategoryID:        req.CategoryID,
+		CategoryID:        categoryUUID,
 		Name:              req.Name,
 		SKU:               req.SKU,
 		UnitOfMeasurement: req.UnitOfMeasurement,
-		MinimumThreshold:  req.MinimumThreshold,
-		CurrentStock:      req.CurrentStock,
+		MinimumThreshold:  thresholdBase,  // Stored in base units
+		CurrentStock:      currentStockBase, // Stored in base units
 		UnitCost:          req.UnitCost,
 		TrackStock:        trackStock,
 	}
@@ -76,7 +104,16 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item.ID = itemID
-	utils.RespondSuccess(w, http.StatusCreated, item)
+
+	// Convert to display format for response
+	itemDisplay, err := item.ToDisplay()
+	if err != nil {
+		h.log.Error("Failed to convert item to display", err)
+		utils.RespondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", nil)
+		return
+	}
+
+	utils.RespondSuccess(w, http.StatusCreated, itemDisplay)
 }
 
 func (h *InventoryHandler) GetItem(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +135,16 @@ func (h *InventoryHandler) GetItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to display format
+	itemDisplay, err := item.ToDisplay()
+	if err != nil {
+		h.log.Error("Failed to convert item to display", err)
+		utils.RespondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", nil)
+		return
+	}
+
 	role := getRoleFromContext(r.Context())
-	utils.RespondSuccess(w, http.StatusOK, sanitizeItemForRole(item, role))
+	utils.RespondSuccess(w, http.StatusOK, sanitizeItemDisplayForRole(itemDisplay, role))
 }
 
 func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {

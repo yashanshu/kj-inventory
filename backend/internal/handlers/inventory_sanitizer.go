@@ -2,6 +2,32 @@ package handlers
 
 import "hasufel.kj/internal/domain"
 
+// sanitizeItemDisplayForRole removes sensitive fields based on user role
+func sanitizeItemDisplayForRole(item *domain.ItemDisplay, role domain.UserRole) *domain.ItemDisplay {
+	if item == nil {
+		return nil
+	}
+
+	if role != domain.RoleAdmin {
+		item.UnitCost = nil
+	}
+
+	return item
+}
+
+// sanitizeItemsDisplayForRole sanitizes multiple items
+func sanitizeItemsDisplayForRole(items []*domain.ItemDisplay, role domain.UserRole) []*domain.ItemDisplay {
+	if len(items) == 0 {
+		return items
+	}
+
+	for _, item := range items {
+		sanitizeItemDisplayForRole(item, role)
+	}
+	return items
+}
+
+// Legacy functions for backward compatibility (can be removed if not used)
 func sanitizeItemForRole(item *domain.Item, role domain.UserRole) *domain.Item {
 	if item == nil {
 		return nil
