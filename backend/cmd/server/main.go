@@ -43,6 +43,7 @@ func main() {
 	movementRepo := repository.NewMovementRepository(db)
 	alertRepo := repository.NewAlertRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	orderRepo := repository.NewOrderRepository(db)
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
@@ -54,6 +55,7 @@ func main() {
 	inventoryHandler := handlers.NewInventoryHandler(inventoryService, log)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService, log)
 	movementHandler := handlers.NewMovementHandler(inventoryService, log)
+	orderHandler := handlers.NewOrderHandler(orderRepo, log)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -88,6 +90,9 @@ func main() {
 		r.Post("/auth/login", authHandler.Login)
 		r.Post("/auth/register", authHandler.Register)
 
+		// Order ingestion (authenticated via token, not JWT)
+		r.Post("/orders/ingest", orderHandler.IngestOrder)
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
@@ -121,6 +126,11 @@ func main() {
 			r.Post("/movements", movementHandler.CreateMovement)
 			r.Get("/movements", movementHandler.GetMovements)
 			r.Get("/items/{id}/movements", movementHandler.GetItemMovements)
+
+			// Orders (viewing)
+			r.Get("/orders", orderHandler.ListOrders)
+			r.Get("/orders/stats", orderHandler.GetOrderStats)
+			r.Get("/orders/{id}", orderHandler.GetOrder)
 		})
 	})
 

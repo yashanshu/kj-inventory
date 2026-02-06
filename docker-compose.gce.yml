@@ -1,0 +1,114 @@
+services:
+  # KJ Inventory Backend + Frontend
+  app:
+    image: ${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}
+    restart: unless-stopped
+
+    ports:
+      - "${APP_HOST_PORT:-8080}:8080"
+
+    environment:
+      # Server Configuration
+      - SERVER_PORT=${SERVER_PORT:-8080}
+      - SERVER_READ_TIMEOUT=${SERVER_READ_TIMEOUT:-15}
+      - SERVER_WRITE_TIMEOUT=${SERVER_WRITE_TIMEOUT:-15}
+
+      # Database Configuration (SQLite)
+      - DATABASE_DRIVER=${DATABASE_DRIVER:-sqlite3}
+      - DATABASE_URL=${DATABASE_URL:-file:/app/data/inventory.db?_fk=1}
+      - DATABASE_MAX_OPEN_CONN=${DATABASE_MAX_OPEN_CONN:-25}
+      - DATABASE_MAX_IDLE_CONN=${DATABASE_MAX_IDLE_CONN:-10}
+
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_TIME=24
+
+      # CORS Configuration
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+
+      # Application Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SERVE_STATIC=true
+
+      # File uploads
+      - MAX_UPLOAD_SIZE=10485760
+      - UPLOAD_PATH=/app/data/uploads
+
+    volumes:
+      - app-data:/app/data
+      - ./logs:/app/logs
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - kj-network
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.25'
+          memory: 192M
+
+  # Swiggy Order Scraper
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+    environment:
+      # Swiggy Configuration
+      - SWIGGY_MOBILE=${SWIGGY_MOBILE}
+
+      # KJ Inventory API (connect to app container)
+      - KJ_API_URL=http://app:8080/api/v1
+      - KJ_API_TOKEN=${KJ_API_TOKEN}
+
+      # Telegram Notification
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+
+      # Firebase (optional)
+      - FIREBASE_SERVICE_ACCOUNT_PATH=${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+      - FIREBASE_FCM_TOKEN=${FIREBASE_FCM_TOKEN:-}
+
+      # Polling Configuration
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-30000}
+      - RESTAURANT_SHIFTS=${RESTAURANT_SHIFTS:-[{"open":12,"close":15},{"open":19,"close":3}]}
+
+    volumes:
+      - scraper-data:/app/data
+
+    depends_on:
+      app:
+        condition: service_healthy
+
+    networks:
+      - kj-network
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  kj-network:
+    driver: bridge
+
+volumes:
+  app-data:
+    driver: local
+  scraper-data:
+    driver: local
