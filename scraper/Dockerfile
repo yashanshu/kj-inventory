@@ -34,7 +34,8 @@ RUN pnpm run build
 RUN mkdir -p /app/data
 
 # Copy data preload
-COPY data ./data-preload
+# Copy data preload
+# COPY data ./data-preload
 
 # Run as non-root
 RUN addgroup -g 1001 scraper && \

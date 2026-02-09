@@ -94,7 +94,7 @@ services:
       - TEST_NOTIFICATION_ON_STARTUP=${TEST_NOTIFICATION_ON_STARTUP:-true}
 
     volumes:
-      - scraper-data:/app/data
+      - ./scraper/data:/app/data
 
     depends_on:
       app:
@@ -119,5 +119,4 @@ networks:
 volumes:
   app-data:
     driver: local
-  scraper-data:
-    driver: local
+
