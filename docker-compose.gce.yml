@@ -84,6 +84,15 @@ services:
       - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-30000}
       - RESTAURANT_SHIFTS=${RESTAURANT_SHIFTS:-[{"open":12,"close":15},{"open":19,"close":3}]}
 
+      # Notification Toggles
+      - ENABLE_WHATSAPP=${ENABLE_WHATSAPP:-false}
+      - ENABLE_TELEGRAM=${ENABLE_TELEGRAM:-true}
+      - ENABLE_FCM=${ENABLE_FCM:-true}
+
+      # WhatsApp Configuration
+      - WHATSAPP_TO_NUMBER=${WHATSAPP_TO_NUMBER}
+      - PUPPETEER_HEADLESS=${PUPPETEER_HEADLESS:-true}
+
     volumes:
       - scraper-data:/app/data
 

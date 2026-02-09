@@ -1,49 +1,54 @@
 /**
  * Notification Service
  * 
- * Sends notifications via Telegram and Android FCM
+ * Sends notifications via Telegram, Android FCM, and WhatsApp
  */
 
 import TelegramBot from 'node-telegram-bot-api';
 import admin from 'firebase-admin';
 import fs from 'fs-extra';
-import path from 'path';
+import { config } from './config.js';
+import { WhatsAppService } from './whatsapp.js';
 
 interface OrderNotification {
     orderId: string;
     restaurantId: number;
     restaurantName?: string;
     items: { name: string; quantity: number; price: number }[];
-    totalAmount: number;
+    totalAmount: number; // Subtotal
+    discount: number;
+    netAmount: number; // Final Bill
     customerName?: string;
     platform: 'swiggy' | 'zomato';
+    status: string;
+    orderDate: string;
+    prepTime?: number;
 }
 
 export class NotificationService {
     private telegramBot: TelegramBot | null = null;
-    private telegramChatId: string | null = null;
-    private fcmToken: string | null = null;
+    private whatsApp: WhatsAppService | null = null;
     private fcmInitialized = false;
 
     async initialize(): Promise<void> {
         // Initialize Telegram
-        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-        this.telegramChatId = process.env.TELEGRAM_CHAT_ID || null;
-
-        if (telegramToken && this.telegramChatId) {
-            this.telegramBot = new TelegramBot(telegramToken, { polling: false });
+        if (config.enableTelegram && config.telegramToken && config.telegramChatId) {
+            this.telegramBot = new TelegramBot(config.telegramToken, { polling: false });
             console.log('Telegram notifications enabled');
         } else {
-            console.log('Telegram notifications disabled (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)');
+            console.log('Telegram notifications disabled or missing credentials');
+        }
+
+        // Initialize WhatsApp
+        if (config.enableWhatsApp) {
+            this.whatsApp = new WhatsAppService();
+            await this.whatsApp.initialize();
         }
 
         // Initialize Firebase Cloud Messaging
-        const fcmPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-        this.fcmToken = process.env.FIREBASE_FCM_TOKEN || null;
-
-        if (fcmPath && this.fcmToken && await fs.pathExists(fcmPath)) {
+        if (config.enableFCM && config.firebaseServiceAccountPath && config.firebaseFcmToken && await fs.pathExists(config.firebaseServiceAccountPath)) {
             try {
-                const serviceAccount = await fs.readJson(fcmPath);
+                const serviceAccount = await fs.readJson(config.firebaseServiceAccountPath);
 
                 if (!admin.apps.length) {
                     admin.initializeApp({
@@ -57,39 +62,53 @@ export class NotificationService {
                 console.warn('Failed to initialize Firebase:', error);
             }
         } else {
-            console.log('FCM notifications disabled (missing config or token)');
+            console.log('FCM notifications disabled or missing config');
         }
     }
 
     async notifyNewOrder(order: OrderNotification): Promise<void> {
         const message = this.formatOrderMessage(order);
+        const waMessage = this.formatWhatsAppMessage(order);
+
+        const promises: Promise<void>[] = [];
 
         // Send Telegram notification
-        if (this.telegramBot && this.telegramChatId) {
-            try {
-                await this.telegramBot.sendMessage(this.telegramChatId, message, {
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(
+                this.telegramBot.sendMessage(config.telegramChatId, message, {
                     parse_mode: 'HTML',
-                });
-                console.log(`Telegram notification sent for order ${order.orderId}`);
-            } catch (error) {
-                console.error('Telegram notification failed:', error);
-            }
+                }).then(() => {
+                    console.log(`Telegram notification sent for order ${order.orderId}`);
+                }).catch(err => {
+                    console.error('Telegram notification failed:', err.message);
+                })
+            );
+        }
+
+        // Send WhatsApp notification
+        if (this.whatsApp) {
+            promises.push(
+                this.whatsApp.sendMessage(waMessage).catch(err => {
+                    console.error('WhatsApp notification failed:', err.message);
+                })
+            );
         }
 
         // Send FCM notification
-        if (this.fcmInitialized && this.fcmToken) {
-            try {
-                await admin.messaging().send({
-                    token: this.fcmToken,
+        if (this.fcmInitialized && config.firebaseFcmToken) {
+            promises.push(
+                admin.messaging().send({
+                    token: config.firebaseFcmToken,
                     notification: {
-                        title: `New ${order.platform.toUpperCase()} Order!`,
-                        body: `Rs.${order.totalAmount} - ${order.items.length} item(s)`,
+                        title: `New ${order.platform.toUpperCase()} Order! (${order.status})`,
+                        body: `Rs.${order.netAmount} - ${order.items.length} item(s)`,
                     },
                     data: {
                         orderId: order.orderId,
                         platform: order.platform,
                         restaurantId: String(order.restaurantId),
-                        totalAmount: String(order.totalAmount),
+                        totalAmount: String(order.netAmount),
+                        status: order.status
                     },
                     android: {
                         priority: 'high',
@@ -99,43 +118,43 @@ export class NotificationService {
                             sound: 'default',
                         },
                     },
-                });
-                console.log(`FCM notification sent for order ${order.orderId}`);
-            } catch (error) {
-                console.error('FCM notification failed:', error);
-            }
+                }).then(() => {
+                    console.log(`FCM notification sent for order ${order.orderId}`);
+                }).catch(err => {
+                    console.error('FCM notification failed:', err.message);
+                })
+            );
         }
+
+        await Promise.allSettled(promises);
     }
 
     async notifySessionExpired(): Promise<void> {
         const message = '<b>Session Expired!</b>\n\nYour Swiggy session has expired. Please run:\n<code>pnpm run login</code>';
+        const plainMessage = '⚠️ Session Expired!\n\nYour Swiggy session has expired. Please run: pnpm run login';
 
-        if (this.telegramBot && this.telegramChatId) {
-            try {
-                await this.telegramBot.sendMessage(this.telegramChatId, message, {
-                    parse_mode: 'HTML',
-                });
-            } catch (error) {
-                console.error('Telegram notification failed:', error);
-            }
+        const promises: Promise<void>[] = [];
+
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, message, { parse_mode: 'HTML' }).then(() => { }));
         }
 
-        if (this.fcmInitialized && this.fcmToken) {
-            try {
-                await admin.messaging().send({
-                    token: this.fcmToken,
-                    notification: {
-                        title: 'Session Expired',
-                        body: 'Please re-login to continue receiving order notifications',
-                    },
-                    android: {
-                        priority: 'high',
-                    },
-                });
-            } catch (error) {
-                console.error('FCM notification failed:', error);
-            }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(plainMessage).then(() => { }));
         }
+
+        if (this.fcmInitialized && config.firebaseFcmToken) {
+            promises.push(admin.messaging().send({
+                token: config.firebaseFcmToken,
+                notification: {
+                    title: 'Session Expired',
+                    body: 'Please re-login to continue receiving order notifications',
+                },
+                android: { priority: 'high' },
+            }).then(() => { }));
+        }
+
+        await Promise.allSettled(promises);
     }
 
     private formatOrderMessage(order: OrderNotification): string {
@@ -143,16 +162,50 @@ export class NotificationService {
             .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price})`)
             .join('\n');
 
+        const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
+        const discountRow = order.discount > 0 ? `<b>Discount:</b> -Rs.${order.discount}\n` : '';
+
         return `
 <b>New ${order.platform.toUpperCase()} Order!</b>
 
 <b>Order ID:</b> ${order.orderId}
+<b>Status:</b> ${order.status.toUpperCase()}
 <b>Restaurant:</b> ${order.restaurantName || order.restaurantId}
-${order.customerName ? `<b>Customer:</b> ${order.customerName}\n` : ''}
+<b>Customer:</b> ${order.customerName || 'Unknown'}
+<b>Time:</b> ${new Date(order.orderDate).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+<b>Prep Time:</b> ${prepTime}
+
 <b>Items:</b>
 ${itemsList || '  (items not available)'}
 
-<b>Total:</b> Rs.${order.totalAmount}
+<b>Subtotal:</b> Rs.${order.totalAmount}
+${discountRow}<b>Net Total:</b> Rs.${order.netAmount}
+`.trim();
+    }
+
+    private formatWhatsAppMessage(order: OrderNotification): string {
+        const itemsList = order.items
+            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price})`)
+            .join('\n');
+
+        const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
+        const discountRow = order.discount > 0 ? `Discount: -Rs.${order.discount}\n` : '';
+
+        return `
+*New ${order.platform.toUpperCase()} Order!*
+
+*Order ID:* ${order.orderId}
+*Status:* ${order.status.toUpperCase()}
+*Restaurant:* ${order.restaurantName || order.restaurantId}
+*Customer:* ${order.customerName || 'Unknown'}
+*Time:* ${new Date(order.orderDate).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+*Prep Time:* ${prepTime}
+
+*Items:*
+${itemsList || '  (items not available)'}
+
+*Subtotal:* Rs.${order.totalAmount}
+${discountRow}*Net Total:* Rs.${order.netAmount}
 `.trim();
     }
 }

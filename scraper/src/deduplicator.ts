@@ -14,7 +14,7 @@ const SEEN_FILE = path.join(DATA_DIR, 'seen-orders.json');
 const MAX_SEEN_ORDERS = 1000;
 
 export class Deduplicator {
-    private seenOrders: Set<string> = new Set();
+    private orderStatuses: Map<string, string> = new Map();
 
     async load(): Promise<void> {
         try {
@@ -22,33 +22,47 @@ export class Deduplicator {
 
             if (await fs.pathExists(SEEN_FILE)) {
                 const data = await fs.readJson(SEEN_FILE);
-                this.seenOrders = new Set(data.orders || []);
-                console.log(`Loaded ${this.seenOrders.size} seen order IDs`);
+                if (data.orders && Array.isArray(data.orders)) {
+                    // Migration from old array format
+                    this.orderStatuses = new Map(data.orders.map((id: string) => [id, 'unknown']));
+                } else if (data.orderStatuses) {
+                    this.orderStatuses = new Map(Object.entries(data.orderStatuses));
+                }
+                console.log(`Loaded ${this.orderStatuses.size} seen orders`);
             }
         } catch (error) {
             console.warn('Could not load seen orders:', error);
-            this.seenOrders = new Set();
+            this.orderStatuses = new Map();
         }
     }
 
-    isNew(orderId: string): boolean {
-        return !this.seenOrders.has(orderId);
+    /**
+     * Check if order is new or has a new status
+     */
+    hasStatusChanged(orderId: string, currentStatus: string): boolean {
+        const lastStatus = this.orderStatuses.get(orderId);
+        return lastStatus !== currentStatus;
     }
 
-    markSeen(orderId: string): void {
-        this.seenOrders.add(orderId);
+    /**
+     * Mark order as seen with current status
+     */
+    markSeen(orderId: string, status: string): void {
+        this.orderStatuses.set(orderId, status);
 
         // Trim if too large
-        if (this.seenOrders.size > MAX_SEEN_ORDERS) {
-            const arr = Array.from(this.seenOrders);
-            this.seenOrders = new Set(arr.slice(-MAX_SEEN_ORDERS));
+        if (this.orderStatuses.size > MAX_SEEN_ORDERS) {
+            const keysToDelete = Array.from(this.orderStatuses.keys()).slice(0, this.orderStatuses.size - MAX_SEEN_ORDERS);
+            for (const key of keysToDelete) {
+                this.orderStatuses.delete(key);
+            }
         }
     }
 
     async save(): Promise<void> {
         try {
             await fs.writeJson(SEEN_FILE, {
-                orders: Array.from(this.seenOrders),
+                orderStatuses: Object.fromEntries(this.orderStatuses),
                 savedAt: new Date().toISOString(),
             }, { spaces: 2 });
         } catch (error) {
