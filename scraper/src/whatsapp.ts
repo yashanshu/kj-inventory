@@ -27,8 +27,14 @@ export class WhatsAppService {
                     '--disable-dev-shm-usage',
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
-                    '--disable-extensions'
-                ]
+                    '--disable-extensions',
+                    '--disable-gpu',
+                    '--disable-software-rasterizer',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding'
+                ],
+                timeout: 60000 // 60 seconds timeout
             }
         });
 
@@ -40,8 +46,10 @@ export class WhatsAppService {
             qrcode.generate(qr, { small: true });
         });
 
-        this.client.on('ready', () => {
+        this.client.on('ready', async () => {
             console.log('WhatsApp Client is ready!');
+            // Small delay to ensure complete initialization
+            await new Promise(resolve => setTimeout(resolve, 2000));
             this.isReady = true;
         });
 
@@ -64,8 +72,36 @@ export class WhatsAppService {
 
         try {
             await this.client.initialize();
+
+            // Wait for ready state with timeout
+            console.log('Waiting for WhatsApp to be ready (this may take up to 2 minutes)...');
+            const maxWaitTime = 120000; // 2 minutes
+            const startTime = Date.now();
+            let lastLogTime = startTime;
+
+            while (!this.isReady && (Date.now() - startTime) < maxWaitTime) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Log progress every 15 seconds
+                const elapsed = Date.now() - lastLogTime;
+                if (elapsed >= 15000) {
+                    const totalElapsed = Math.floor((Date.now() - startTime) / 1000);
+                    console.log(`   Still waiting... (${totalElapsed}s elapsed)`);
+                    lastLogTime = Date.now();
+                }
+            }
+
+            if (!this.isReady) {
+                console.warn('WhatsApp client initialized but not ready after timeout');
+                console.warn('Messages will NOT be sent via WhatsApp');
+            } else {
+                console.log('WhatsApp is ready and will send notifications');
+            }
         } catch (error) {
             console.error('Failed to initialize WhatsApp client:', error);
+            // Don't throw - let the service continue without WhatsApp
+            this.client = null;
+            this.isReady = false;
         }
     }
 

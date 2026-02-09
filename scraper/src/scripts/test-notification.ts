@@ -13,6 +13,7 @@ async function testNotifs() {
 
     const notifier = new NotificationService();
     await notifier.initialize();
+    await notifier.waitForWhatsAppReady();
 
     const testOrder = {
         orderId: `TEST-${Date.now()}`,

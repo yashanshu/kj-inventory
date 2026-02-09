@@ -44,6 +44,7 @@ export class NotificationService {
 
         // Initialize WhatsApp
         if (config.enableWhatsApp) {
+            console.log('Initializing WhatsApp Service (app startup will wait until ready)...');
             this.whatsApp = new WhatsAppService();
             await this.whatsApp.initialize();
         }
@@ -68,6 +69,9 @@ export class NotificationService {
             console.log('FCM notifications disabled or missing config');
         }
     }
+
+
+
 
     async notifyNewOrder(order: OrderNotification): Promise<void> {
         const message = this.formatOrderMessage(order);
