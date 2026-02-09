@@ -7,19 +7,19 @@ import (
 // ItemDisplay represents an item with display-friendly values
 // Stock values are converted from base units to display units
 type ItemDisplay struct {
-	ID                string   `json:"id"`
-	OrganizationID    string   `json:"organizationId"`
-	CategoryID        string   `json:"categoryId"`
-	Name              string   `json:"name"`
-	SKU               *string  `json:"sku"`
-	UnitOfMeasurement string   `json:"unit"`
-	MinimumThreshold  float64  `json:"minimumThreshold"` // Converted to display unit
-	CurrentStock      float64  `json:"currentStock"`      // Converted to display unit
-	UnitCost          *float64 `json:"unitCost"`
-	IsActive          bool     `json:"isActive"`
-	TrackStock        bool     `json:"trackStock"`
-	CreatedAt         string   `json:"createdAt"`
-	UpdatedAt         string   `json:"updatedAt"`
+	ID                string    `json:"id"`
+	OrganizationID    string    `json:"organizationId"`
+	CategoryID        string    `json:"categoryId"`
+	Name              string    `json:"name"`
+	SKU               *string   `json:"sku"`
+	UnitOfMeasurement string    `json:"unit"`
+	MinimumThreshold  float64   `json:"minimumThreshold"` // Converted to display unit
+	CurrentStock      float64   `json:"currentStock"`     // Converted to display unit
+	UnitCost          *float64  `json:"unitCost"`
+	IsActive          bool      `json:"isActive"`
+	TrackStock        bool      `json:"trackStock"`
+	CreatedAt         string    `json:"createdAt"`
+	UpdatedAt         string    `json:"updatedAt"`
 	Category          *Category `json:"category,omitempty"`
 }
 

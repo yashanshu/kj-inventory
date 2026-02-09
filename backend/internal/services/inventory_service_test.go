@@ -161,12 +161,12 @@ func TestInventoryService_ListItemsWithFiltersPaginated(t *testing.T) {
 	)
 
 	tests := []struct {
-		name           string
-		limit          int
-		offset         int
-		expectedItems  int
-		expectedTotal  int
-		description    string
+		name          string
+		limit         int
+		offset        int
+		expectedItems int
+		expectedTotal int
+		description   string
 	}{
 		{"first page", 10, 0, 10, 25, "should return 10 items with total 25"},
 		{"second page", 10, 10, 10, 25, "should return 10 items with total 25"},

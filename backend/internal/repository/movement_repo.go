@@ -186,11 +186,11 @@ func (r *movementRepoSQLite) scanMovementsWithItems(rows *sql.Rows) ([]*domain.S
 		var mv domain.StockMovement
 		var item domain.Item
 		var (
-			mvIDStr, itemIDStr, createdByStr                     string
-			itemOrgIDStr, itemCatIDStr                           string
-			reference, notes, itemSKU                            sql.NullString
-			itemUnitCost                                         sql.NullFloat64
-			itemIsActive, itemTrackStock                         bool
+			mvIDStr, itemIDStr, createdByStr string
+			itemOrgIDStr, itemCatIDStr       string
+			reference, notes, itemSKU        sql.NullString
+			itemUnitCost                     sql.NullFloat64
+			itemIsActive, itemTrackStock     bool
 		)
 
 		if err := rows.Scan(

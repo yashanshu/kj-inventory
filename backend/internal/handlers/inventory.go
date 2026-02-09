@@ -86,7 +86,7 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		Name:              req.Name,
 		SKU:               req.SKU,
 		UnitOfMeasurement: req.UnitOfMeasurement,
-		MinimumThreshold:  thresholdBase,  // Stored in base units
+		MinimumThreshold:  thresholdBase,    // Stored in base units
 		CurrentStock:      currentStockBase, // Stored in base units
 		UnitCost:          req.UnitCost,
 		TrackStock:        trackStock,

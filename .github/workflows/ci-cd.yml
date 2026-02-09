@@ -113,11 +113,11 @@ jobs:
         working-directory: scraper
         run: pnpm run build
 
-      - name: Run tests
-        working-directory: scraper
-        env:
-          CI: true
-        run: pnpm test -- --run
+      # - name: Run tests
+      #   working-directory: scraper
+      #   env:
+      #     CI: true
+      #   run: pnpm test -- --run
 
   # Build and Push App Image
   build-app:

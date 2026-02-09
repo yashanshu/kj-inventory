@@ -18,13 +18,13 @@ import (
 
 // Mock dashboard service
 type mockDashboardService struct {
-	metrics         *services.DashboardMetrics
-	movements       []*domain.StockMovement
-	trends          []services.StockTrend
-	breakdown       []services.CategoryBreakdown
-	lowStockItems   []*domain.Item
-	alerts          []*domain.Alert
-	shouldError     bool
+	metrics       *services.DashboardMetrics
+	movements     []*domain.StockMovement
+	trends        []services.StockTrend
+	breakdown     []services.CategoryBreakdown
+	lowStockItems []*domain.Item
+	alerts        []*domain.Alert
+	shouldError   bool
 }
 
 func (m *mockDashboardService) GetMetrics(ctx context.Context, orgID uuid.UUID) (*services.DashboardMetrics, error) {
@@ -294,12 +294,12 @@ func TestDashboardHandler_GetLowStockItems(t *testing.T) {
 	mockService := &mockDashboardService{
 		lowStockItems: []*domain.Item{
 			{
-				ID:               itemID,
-				Name:             "Low Stock Item",
-				SKU:              &sku,
+				ID:                itemID,
+				Name:              "Low Stock Item",
+				SKU:               &sku,
 				UnitOfMeasurement: "pcs",
-				MinimumThreshold: 50,
-				CurrentStock:     5,
+				MinimumThreshold:  50,
+				CurrentStock:      5,
 			},
 		},
 	}
