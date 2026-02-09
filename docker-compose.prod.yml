@@ -28,6 +28,10 @@ services:
       # Application Configuration
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SERVE_STATIC=true
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-30000}
+      - RESTAURANT_SHIFTS=${RESTAURANT_SHIFTS:-[{"open":12,"close":15},{"open":19,"close":3}]}
+      - RESTAURANT_MAP_JSON=${RESTAURANT_MAP_JSON:-{}}
+      - ENABLE_WHATSAPP=${ENABLE_WHATSAPP:-false}
 
       # Optional: File uploads
       - MAX_UPLOAD_SIZE=10485760  # 10MB in bytes
@@ -36,7 +40,7 @@ services:
     volumes:
       # Persistent data storage
       - ./data:/app/data
-      - ./logs:/app/logs
+
 
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]

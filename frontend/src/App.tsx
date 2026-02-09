@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { OrdersPage } from './pages/OrdersPage';
 import { Layout } from './components/Layout';
 
 const queryClient = new QueryClient({
@@ -51,6 +52,7 @@ function App() {
                   <Routes>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/inventory" element={<InventoryPage />} />
+                    <Route path="/orders" element={<OrdersPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

@@ -80,6 +80,7 @@ export class SwiggyClient {
                 this.lastUpdatedTimes = new Map(
                     entries.map(([key, value]) => [Number(key), value as string])
                 );
+                this.lastSummaryDate = state.lastSummaryDate || '';
             }
 
             console.log(`Session loaded (captured: ${this.session?.capturedAt})`);
@@ -177,9 +178,138 @@ export class SwiggyClient {
         }
     }
 
+    async getBusinessMetrics(fromDate: number, toDate: number): Promise<any> {
+        if (!this.session) {
+            throw new Error('Session not loaded');
+        }
+
+        const restaurantIds = this.session.restaurantIds;
+        if (restaurantIds.length === 0) {
+            console.warn('No restaurant IDs in session for metrics.');
+            return null;
+        }
+
+        const query = `
+        query {
+            businessMetricsDetailsV3(
+            input: {
+                rids: [${restaurantIds.join(',')}]
+                period: CUSTOM
+                fromDate: ${fromDate}
+                toDate: ${toDate}
+                metricsType: LIVE_METRICS
+                metricIds: []
+            }
+            ) {
+            title
+            subTitleV2
+            businessMetricsDetails {
+                id
+                title
+                dataTimeInfo
+                metrics {
+                id
+                cardTitle
+                widgetType
+                subWidgetType
+                subMetrics {
+                    id
+                    title
+                    infoText
+                    emptyInfoText
+                    cardMetrics {
+                    id
+                    label
+                    value
+                    subValue
+                    timeComparison
+                    arrowType
+                    }
+                }
+                listCell {
+                    label
+                    emptyInfoText
+                    metrics {
+                    label
+                    value
+                    }
+                }
+                current {
+                    title
+                    emptyInfoText
+                    metrics {
+                    label
+                    value
+                    percent
+                    subValue
+                    arrowType
+                    }
+                }
+                prev {
+                    title
+                    emptyInfoText
+                    metrics {
+                    label
+                    value
+                    percent
+                    subValue
+                    arrowType
+                    }
+                }
+                tips {
+                    contentID
+                    type
+                    mediaUrl
+                    mediaType
+                    iconUrl
+                    label
+                    title
+                    description
+                    cta {
+                    message
+                    deeplink
+                    }
+                }
+                }
+            }
+            }
+        }
+        `;
+
+        try {
+            // Use a separate axios instance or override baseURL for this request
+            // We use the same headers (cookies) as the partner API
+            const response = await axios.post(
+                'https://vhc-composer.swiggy.com/query',
+                { query, variables: {} },
+                {
+                    headers: this.getHeaders(),
+                    params: { query: 'businessMetricsDetailsV3' }
+                }
+            );
+
+            if (response.data.errors) {
+                console.error('GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
+                return null;
+            }
+
+            return response.data.data;
+
+        } catch (error: any) {
+            console.error('Failed to fetch business metrics:', error.message);
+            if (error.response?.data) {
+                console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+            }
+            return null;
+        }
+    }
+
+    public lastSummaryDate: string = '';
+
     private async saveState(): Promise<void> {
         await fs.writeJson(STATE_FILE, {
             lastUpdatedTimes: Object.fromEntries(this.lastUpdatedTimes),
+            lastSummaryDate: this.lastSummaryDate,
             savedAt: new Date().toISOString(),
         }, { spaces: 2 });
     }

@@ -15,14 +15,17 @@ interface OrderNotification {
     restaurantId: number;
     restaurantName?: string;
     items: { name: string; quantity: number; price: number }[];
-    totalAmount: number; // Subtotal
-    discount: number;
-    netAmount: number; // Final Bill
+    orderValue: number; // Bill (item totals + packing + GST)
+    restaurantDiscount: number; // Discount restaurant is giving
+    netEarnings: number; // orderValue - restaurantDiscount (approx)
+    offerDescription?: string; // e.g. "60% off + 50% off"
     customerName?: string;
+    customerArea?: string; // Delivery zone
     platform: 'swiggy' | 'zomato';
     status: string;
-    orderDate: string;
+    orderDate: string; // ISO string
     prepTime?: number;
+    orderNumber?: number; // Daily order count
 }
 
 export class NotificationService {
@@ -100,14 +103,14 @@ export class NotificationService {
                 admin.messaging().send({
                     token: config.firebaseFcmToken,
                     notification: {
-                        title: `New ${order.platform.toUpperCase()} Order! (${order.status})`,
-                        body: `Rs.${order.netAmount} - ${order.items.length} item(s)`,
+                        title: `New ${order.platform.toUpperCase()} Order!`,
+                        body: `₹${order.orderValue.toFixed(0)} - ${order.items.length} item(s)`,
                     },
                     data: {
                         orderId: order.orderId,
                         platform: order.platform,
                         restaurantId: String(order.restaurantId),
-                        totalAmount: String(order.netAmount),
+                        totalAmount: String(order.orderValue),
                         status: order.status
                     },
                     android: {
@@ -157,55 +160,275 @@ export class NotificationService {
         await Promise.allSettled(promises);
     }
 
+    async sendTestNotification(): Promise<void> {
+        const message = '<b>🔔 Test Notification</b>\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
+        const waMessage = '🔔 *Test Notification*\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
+
+        console.log('Sending test notifications...');
+        const promises: Promise<void>[] = [];
+
+        // Telegram
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(
+                this.telegramBot.sendMessage(config.telegramChatId, message, {
+                    parse_mode: 'HTML',
+                }).then(() => {
+                    console.log('✅ Telegram test notification sent');
+                }).catch(err => {
+                    console.error('❌ Telegram test notification failed:', err.message);
+                })
+            );
+        } else {
+            console.log('ℹ️ Telegram not enabled or configured for test');
+        }
+
+        // WhatsApp
+        if (this.whatsApp) {
+            promises.push(
+                this.whatsApp.sendMessage(waMessage).then(() => {
+                    console.log('✅ WhatsApp test notification sent');
+                }).catch(err => {
+                    console.error('❌ WhatsApp test notification failed:', err.message);
+                })
+            );
+        } else {
+            console.log('ℹ️ WhatsApp not enabled for test');
+        }
+
+        // FCM
+        if (this.fcmInitialized && config.firebaseFcmToken) {
+            promises.push(
+                admin.messaging().send({
+                    token: config.firebaseFcmToken,
+                    notification: {
+                        title: 'Test Notification',
+                        body: 'This is a test message from the scraper.',
+                    },
+                    android: {
+                        priority: 'high',
+                        notification: {
+                            channelId: 'orders', // Use same channel as orders for relevance
+                        },
+                    },
+                }).then(() => {
+                    console.log('✅ FCM test notification sent');
+                }).catch(err => {
+                    console.error('❌ FCM test notification failed:', err.message);
+                })
+            );
+        } else {
+            console.log('ℹ️ FCM not enabled or configured for test');
+        }
+
+        await Promise.allSettled(promises);
+        console.log('Test notification process completed.');
+    }
+
     private formatOrderMessage(order: OrderNotification): string {
         const itemsList = order.items
-            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price})`)
+            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price.toFixed(0)})`)
             .join('\n');
 
         const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
-        const discountRow = order.discount > 0 ? `<b>Discount:</b> -Rs.${order.discount}\n` : '';
+
+        // Format discount line with offer description if available
+        let discountRow = '';
+        if (order.restaurantDiscount > 0) {
+            const offerText = order.offerDescription ? ` (${order.offerDescription})` : '';
+            discountRow = `<b>Restaurant Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
+        }
+
+        // Delivery area if present
+        const areaRow = order.customerArea ? `<b>Area:</b> ${order.customerArea}\n` : '';
+
+        // Order number if present
+        const orderNumText = order.orderNumber ? ` #${order.orderNumber}` : '';
+
+        // Format time in IST with date and time
+        const orderTime = this.formatISTDateTime(order.orderDate);
 
         return `
-<b>New ${order.platform.toUpperCase()} Order!</b>
+🔔 <b>New ${order.platform.toUpperCase()} Order${orderNumText}!</b>
 
-<b>Order ID:</b> ${order.orderId}
-<b>Status:</b> ${order.status.toUpperCase()}
-<b>Restaurant:</b> ${order.restaurantName || order.restaurantId}
+<b>Order ID:</b> <code>${order.orderId}</code>
 <b>Customer:</b> ${order.customerName || 'Unknown'}
-<b>Time:</b> ${new Date(order.orderDate).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+${areaRow}<b>Time:</b> ${orderTime}
 <b>Prep Time:</b> ${prepTime}
 
 <b>Items:</b>
 ${itemsList || '  (items not available)'}
 
-<b>Subtotal:</b> Rs.${order.totalAmount}
-${discountRow}<b>Net Total:</b> Rs.${order.netAmount}
+<b>Order Value:</b> ₹${order.orderValue.toFixed(0)}
+${discountRow}<b>💰 Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
 `.trim();
+    }
+
+    private formatISTDateTime(isoString: string): string {
+        try {
+            const date = new Date(isoString);
+            // Format as "07 Feb, 12:42 AM IST"
+            return date.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }) + ' IST';
+        } catch {
+            return isoString;
+        }
     }
 
     private formatWhatsAppMessage(order: OrderNotification): string {
         const itemsList = order.items
-            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price})`)
+            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price.toFixed(0)})`)
             .join('\n');
 
         const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
-        const discountRow = order.discount > 0 ? `Discount: -Rs.${order.discount}\n` : '';
+
+        // Format discount line with offer description if available
+        let discountRow = '';
+        if (order.restaurantDiscount > 0) {
+            const offerText = order.offerDescription ? ` (${order.offerDescription})` : '';
+            discountRow = `Restaurant Discount: -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
+        }
+
+        // Delivery area if present
+        const areaRow = order.customerArea ? `Area: ${order.customerArea}\n` : '';
+
+        // Order number if present
+        const orderNumText = order.orderNumber ? ` #${order.orderNumber}` : '';
+
+        // Format time
+        const orderTime = this.formatISTDateTime(order.orderDate);
 
         return `
-*New ${order.platform.toUpperCase()} Order!*
+🔔 *New ${order.platform.toUpperCase()} Order${orderNumText}!*
 
 *Order ID:* ${order.orderId}
-*Status:* ${order.status.toUpperCase()}
-*Restaurant:* ${order.restaurantName || order.restaurantId}
 *Customer:* ${order.customerName || 'Unknown'}
-*Time:* ${new Date(order.orderDate).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+${areaRow}*Time:* ${orderTime}
 *Prep Time:* ${prepTime}
 
 *Items:*
 ${itemsList || '  (items not available)'}
 
-*Subtotal:* Rs.${order.totalAmount}
-${discountRow}*Net Total:* Rs.${order.netAmount}
+*Order Value:* ₹${order.orderValue.toFixed(0)}
+${discountRow}*💰 Net Earnings:* ₹${order.netEarnings.toFixed(0)}
 `.trim();
+    }
+
+    async sendDailySummary(data: any): Promise<void> {
+        if (!data || !data.businessMetricsDetailsV3) {
+            console.error('Invalid summary data');
+            return;
+        }
+
+        const metrics = data.businessMetricsDetailsV3.businessMetricsDetails;
+        const salesCard = metrics.find((m: any) => m.id === 'SALES_V2');
+        const ratingsCard = metrics.find((m: any) => m.id === 'RATINGS');
+        const complaintsCard = metrics.find((m: any) => m.id === 'COMPLAINTS_V2');
+        const funnelCard = metrics.find((m: any) => m.id === 'CONVERSION_FUNNEL');
+
+        // Extract Sales Data
+        const salesMetrics = salesCard?.metrics?.[0]?.subMetrics?.[0]?.cardMetrics || [];
+        const getMetricVal = (id: string, arr: any[]) => arr.find((m: any) => m.id === id)?.value || '0';
+
+        const netSales = getMetricVal('NET_SALES', salesMetrics);
+        const deliveredOrders = getMetricVal('DELIVERED_ORDERS', salesMetrics);
+        const netAov = getMetricVal('NET_AOV', salesMetrics);
+        const cancelledOrders = getMetricVal('CANCELLED_ORDER', salesMetrics);
+
+        // Extract Ratings Data
+        const ratingMetrics = ratingsCard?.metrics?.[0]?.subMetrics?.[0]?.cardMetrics || [];
+        const ratedOrders = getMetricVal('TOTAL_RATED_ORDERS', ratingMetrics);
+        const poorRatedOrders = getMetricVal('POOR_RATED_ORDERS', ratingMetrics);
+
+        // Extract Complaints Data
+        const complaintMetrics = complaintsCard?.metrics?.[0]?.subMetrics?.[0]?.cardMetrics || [];
+        const totalComplaints = getMetricVal('ORDER_WITH_COMPLAINS', complaintMetrics);
+
+        // Extract Funnel Data
+        const funnelMetrics = funnelCard?.metrics?.[0]?.current?.metrics || [];
+        const getFunnelVal = (label: string) => funnelMetrics.find((m: any) => m.label === label)?.value || '0';
+        const impressions = getFunnelVal('IMPRESSIONS');
+        const menuOpens = getFunnelVal('MENU OPENS');
+        const cartBuilds = getFunnelVal('CART BUILDS');
+
+        // Format Date
+        const dateStr = data.businessMetricsDetailsV3.subTitleV2?.value
+            ? data.businessMetricsDetailsV3.subTitleV2.value.replace('{{date}}', data.businessMetricsDetailsV3.subTitleV2.attribute_values?.date?.value || '')
+            : 'Yesterday';
+
+        const message = `
+            <b>📊 Daily Business Summary </b>
+${dateStr}
+
+        <b>💰 Sales Performance </b>
+• Net Sales: <b>${netSales} </b>
+• Delivered Orders: <b>${deliveredOrders} </b>
+• Net AOV: <b>${netAov} </b>
+• Cancelled: <b>${cancelledOrders} </b>
+
+            <b>⭐ Ratings & Quality </b>
+• Rated Orders: <b>${ratedOrders} </b>
+• Poor Ratings: <b>${poorRatedOrders} </b>
+• Complaints: <b>${totalComplaints} </b>
+
+            <b>📈 Funnel(Conversion) </b>
+• Impressions: <b>${impressions} </b>
+• Menu Opens: <b>${menuOpens} </b>
+• Cart Builds: <b>${cartBuilds} </b>
+            `.trim();
+
+        const waMessage = `
+            *📊 Daily Business Summary *
+                ${dateStr}
+    
+*💰 Sales Performance *
+• Net Sales: * ${netSales}*
+• Delivered Orders: * ${deliveredOrders}*
+• Net AOV: * ${netAov}*
+• Cancelled: * ${cancelledOrders}*
+    
+*⭐ Ratings & Quality *
+• Rated Orders: * ${ratedOrders}*
+• Poor Ratings: * ${poorRatedOrders}*
+• Complaints: * ${totalComplaints}*
+    
+*📈 Funnel(Conversion) *
+• Impressions: * ${impressions}*
+• Menu Opens: * ${menuOpens}*
+• Cart Builds: * ${cartBuilds}*
+            `.trim();
+
+        const promises: Promise<void>[] = [];
+
+        // Send Telegram
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(
+                this.telegramBot.sendMessage(config.telegramChatId, message, {
+                    parse_mode: 'HTML',
+                }).then(() => {
+                    console.log(`Daily summary sent to Telegram`);
+                }).catch(err => {
+                    console.error('Telegram summary failed:', err.message);
+                })
+            );
+        }
+
+        // Send WhatsApp
+        if (this.whatsApp) {
+            promises.push(
+                this.whatsApp.sendMessage(waMessage).then(() => {
+                    console.log(`Daily summary sent to WhatsApp`);
+                }).catch(err => {
+                    console.error('WhatsApp summary failed:', err.message);
+                })
+            );
+        }
+
+        await Promise.allSettled(promises);
     }
 }

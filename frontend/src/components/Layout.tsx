@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
+import { Package, LayoutDashboard, LogOut, Menu, X, ShoppingCart } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface LayoutProps {
@@ -18,6 +18,7 @@ export function Layout({ children }: LayoutProps) {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Inventory', href: '/inventory', icon: Package },
+    { name: 'Orders', href: '/orders', icon: ShoppingCart },
   ];
 
   const handleLogout = () => {
@@ -37,9 +38,8 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -67,11 +67,10 @@ export function Layout({ children }: LayoutProps) {
                   key={item.name}
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
                       ? 'bg-blue-50 text-blue-600 font-medium'
                       : 'text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.name}</span>

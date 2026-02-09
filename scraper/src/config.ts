@@ -22,6 +22,18 @@ function parseShifts(): Shift[] {
     return DEFAULT_SHIFTS;
 }
 
+function parseRestaurantMap(): Record<string, string> {
+    const mapEnv = process.env.RESTAURANT_MAP_JSON;
+    if (mapEnv) {
+        try {
+            return JSON.parse(mapEnv);
+        } catch (e) {
+            console.error('Invalid RESTAURANT_MAP_JSON format, using empty map');
+        }
+    }
+    return {};
+}
+
 export const config = {
     // Toggles
     enableWhatsApp: process.env.ENABLE_WHATSAPP === 'true',
@@ -34,6 +46,7 @@ export const config = {
     // General
     pollInterval: parseInt(process.env.POLL_INTERVAL_MS || '30000', 10),
     shifts: parseShifts(),
+    restaurantMap: parseRestaurantMap(),
 
     // Swiggy
     swiggyMobile: process.env.SWIGGY_MOBILE,
@@ -52,4 +65,7 @@ export const config = {
     // KJ API
     kjApiUrl: process.env.KJ_API_URL,
     kjApiToken: process.env.KJ_API_TOKEN,
+
+    // Test
+    testNotificationOnStartup: process.env.TEST_NOTIFICATION_ON_STARTUP === 'true',
 };

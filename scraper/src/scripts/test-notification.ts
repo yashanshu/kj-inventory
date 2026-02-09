@@ -22,14 +22,17 @@ async function testNotifs() {
             { name: 'Butter Chicken', quantity: 1, price: 350 },
             { name: 'Naan', quantity: 2, price: 60 }
         ],
-        totalAmount: 470,
-        discount: 0,
-        netAmount: 470,
+        orderValue: 470,
+        restaurantDiscount: 94,
+        netEarnings: 376,
+        offerDescription: '20% off',
         customerName: 'Test User',
+        customerArea: 'Sector 54, Gurgaon',
         platform: 'swiggy' as const,
         status: 'ordered',
         orderDate: new Date().toISOString(),
-        prepTime: 25
+        prepTime: 25,
+        orderNumber: 5
     };
 
     console.log('\nSending Test Order...');

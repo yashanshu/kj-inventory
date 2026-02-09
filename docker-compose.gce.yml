@@ -36,7 +36,7 @@ services:
 
     volumes:
       - app-data:/app/data
-      - ./logs:/app/logs
+
 
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -83,6 +83,7 @@ services:
       # Polling Configuration
       - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-30000}
       - RESTAURANT_SHIFTS=${RESTAURANT_SHIFTS:-[{"open":12,"close":15},{"open":19,"close":3}]}
+      - RESTAURANT_MAP_JSON=${RESTAURANT_MAP_JSON:-{}}
 
       # Notification Toggles
       - ENABLE_WHATSAPP=${ENABLE_WHATSAPP:-false}
@@ -92,6 +93,7 @@ services:
       # WhatsApp Configuration
       - WHATSAPP_TO_NUMBER=${WHATSAPP_TO_NUMBER}
       - PUPPETEER_HEADLESS=${PUPPETEER_HEADLESS:-true}
+      - TEST_NOTIFICATION_ON_STARTUP=${TEST_NOTIFICATION_ON_STARTUP:-true}
 
     volumes:
       - scraper-data:/app/data

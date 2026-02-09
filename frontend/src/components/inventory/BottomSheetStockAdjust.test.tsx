@@ -4,6 +4,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BottomSheetStockAdjust } from './BottomSheetStockAdjust';
 import type { Item } from '../../types/inventory';
 
+// Mock vaul Drawer to avoid portal/animation issues in tests
+vi.mock('vaul', () => ({
+  Drawer: {
+    Root: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+      open ? <div data-testid="drawer-root">{children}</div> : null,
+    Portal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    Overlay: () => <div data-testid="drawer-overlay" />,
+    Content: ({ children }: { children: React.ReactNode }) =>
+      <div data-testid="drawer-content">{children}</div>,
+    Handle: () => <div data-testid="drawer-handle" />,
+    Title: ({ children, className }: { children: React.ReactNode; className?: string }) =>
+      <h2 className={className}>{children}</h2>,
+  },
+}));
+
 // Mock the useCreateMovement hook
 vi.mock('../../hooks/useInventory', () => ({
   useCreateMovement: () => ({
@@ -59,6 +74,11 @@ describe('BottomSheetStockAdjust', () => {
         { wrapper: createWrapper() }
       );
 
+      // Wait for the component to mount and animate
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /stock in/i })).toBeInTheDocument();
+      }, { timeout: 3000 });
+
       // Select IN movement type
       const stockInButton = screen.getByRole('button', { name: /stock in/i });
       fireEvent.click(stockInButton);
@@ -71,7 +91,7 @@ describe('BottomSheetStockAdjust', () => {
       await waitFor(() => {
         expect(screen.getByText(/new stock will be:/i)).toBeInTheDocument();
         expect(screen.getByText('150')).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
     });
 
     it('should show correct preview for OUT movement type', async () => {
