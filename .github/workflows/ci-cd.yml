@@ -1,0 +1,218 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Backend Tests
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Run go fmt check
+        working-directory: backend
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Run tests
+        working-directory: backend
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Build backend
+        working-directory: backend
+        run: CGO_ENABLED=1 go build -v -o bin/server ./cmd/server
+
+  # Frontend Tests
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.1
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TypeScript check
+        working-directory: frontend
+        run: pnpm exec tsc -b --noEmit
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Run tests
+        working-directory: frontend
+        env:
+          CI: true
+        run: pnpm test -- --run
+
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm build
+
+  # Scraper Tests
+  test-scraper:
+    name: Scraper Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.1
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TypeScript check
+        working-directory: scraper
+        run: pnpm run build
+
+      - name: Run tests
+        working-directory: scraper
+        env:
+          CI: true
+        run: pnpm test -- --run
+
+  # Build and Push App Image
+  build-app:
+    name: Build and Push App Image
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=master-,enable={{is_default_branch}}
+            type=ref,event=branch
+
+      - name: Build and push App image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  # Build and Push Scraper Image
+  build-scraper:
+    name: Build and Push Scraper Image
+    runs-on: ubuntu-latest
+    needs: [test-scraper]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-scraper
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=master-,enable={{is_default_branch}}
+            type=ref,event=branch
+
+      - name: Build and push Scraper image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./scraper
+          file: ./scraper/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  # CI Success Summary
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [build-app, build-scraper]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          if [ "${{ needs.build-app.result }}" != "success" ] || \
+             [ "${{ needs.build-scraper.result }}" != "success" ]; then
+            echo "CI failed!"
+            exit 1
+          fi
+          echo "All CI checks passed! ✅"
+          echo "Images built and pushed to ghcr.io"

@@ -59,9 +59,7 @@ services:
 
   # Swiggy Order Scraper
   scraper:
-    build:
-      context: ./scraper
-      dockerfile: Dockerfile
+    image: ${SCRAPER_IMAGE:-ghcr.io/yashanshu/kj-inventory-scraper:latest}
     restart: unless-stopped
 
     environment:

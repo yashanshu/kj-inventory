@@ -232,23 +232,27 @@ deploy_app() {
     cp "${SCRIPT_DIR}/.env.production" "${DEPLOY_DIR}/.env"
 
     # Copy scraper directory
-    mkdir -p "${DEPLOY_DIR}/scraper"
-    cp "${SCRIPT_DIR}/scraper/Dockerfile" "${DEPLOY_DIR}/scraper/"
-    cp "${SCRIPT_DIR}/scraper/package.json" "${DEPLOY_DIR}/scraper/"
-    if [ -f "${SCRIPT_DIR}/scraper/pnpm-lock.yaml" ]; then
-        cp "${SCRIPT_DIR}/scraper/pnpm-lock.yaml" "${DEPLOY_DIR}/scraper/"
-    fi
-    cp "${SCRIPT_DIR}/scraper/tsconfig.json" "${DEPLOY_DIR}/scraper/"
-    cp -r "${SCRIPT_DIR}/scraper/src" "${DEPLOY_DIR}/scraper/"
+    # Note: Scraper source is no longer needed as we pull the image
+    # We only need data directories for session persistence if applicable
 
     # Copy scraper session data if exists
+    # Copy scraper session data
     # Copy scraper session data
     mkdir -p "${DEPLOY_DIR}/scraper/data"
     if [ -f "${SCRIPT_DIR}/scraper/data/session.json" ]; then
         cp "${SCRIPT_DIR}/scraper/data/session.json" "${DEPLOY_DIR}/scraper/data/"
         log_success "Found session.json, including in deployment"
     else
-        log_warning "No session.json found. You'll need to run login after deployment."
+        log_warning "No session.json found. You'll need to run login command if not already authenticated."
+    fi
+
+    # Copy Docker config for registry authentication
+    mkdir -p "${DEPLOY_DIR}/.docker"
+    if [ -f "${HOME}/.docker/config.json" ]; then
+        cp "${HOME}/.docker/config.json" "${DEPLOY_DIR}/.docker/"
+        log_success "Included Docker configuration for registry authentication"
+    else
+        log_warning "No ~/.docker/config.json found. Deployment may fail if pulling from private registry."
     fi
 
     # Create systemd service
@@ -262,7 +266,8 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/kj-inventory
-ExecStart=/usr/bin/docker compose up -d --build
+ExecStartPre=/usr/bin/docker compose pull
+ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=600
 
@@ -274,7 +279,7 @@ EOF
     log_info "Packaging files..."
     TARBALL="${DEPLOY_DIR}/deploy.tar.gz"
     tar -czf "${TARBALL}" -C "${DEPLOY_DIR}" \
-        docker-compose.yml .env scraper kj-inventory.service
+        docker-compose.yml .env scraper .docker kj-inventory.service
 
     # Upload to instance
     log_info "Uploading to instance..."
@@ -289,9 +294,24 @@ EOF
 set -e
 cd /opt/kj-inventory
 sudo tar -xzf /tmp/deploy.tar.gz
+
+# Setup Docker Config for Auth
+mkdir -p ~/.docker
+if [ -d ".docker" ]; then
+    cp .docker/config.json ~/.docker/
+    # Also copy to root if running as root/sudo
+    sudo mkdir -p /root/.docker
+    sudo cp .docker/config.json /root/.docker/
+fi
+
 sudo cp kj-inventory.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable kj-inventory
+
+# Pull latest images explicitely
+echo "Pulling latest images..."
+sudo docker compose pull
+
 sudo systemctl restart kj-inventory
 echo "Waiting for services to start..."
 sleep 15
