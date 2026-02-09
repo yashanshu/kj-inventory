@@ -7,8 +7,7 @@ permissions:
 on:
   push:
     branches:
-      - master
-      - main
+      - hetzner_deploy
   workflow_dispatch:  # Allow manual deployment trigger
 
 concurrency:
