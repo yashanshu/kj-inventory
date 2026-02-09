@@ -295,9 +295,14 @@ set -e
 cd /opt/kj-inventory
 sudo tar -xzf /tmp/deploy.tar.gz
 
+# Fix permissions for scraper data
+# The scraper service runs as user 1001, but the mapped volume is owned by root
+# because of how we copied/extracted files. We need to fix this.
+sudo chown -R 1001:1001 scraper/data
+
 # Setup Docker Config for Auth
-mkdir -p ~/.docker
-if [ -d ".docker" ]; then
+if [ -f ".docker/config.json" ]; then
+    mkdir -p ~/.docker
     cp .docker/config.json ~/.docker/
     # Also copy to root if running as root/sudo
     sudo mkdir -p /root/.docker
