@@ -24,7 +24,7 @@ REGION="asia-south2"
 ZONE="${REGION}-a"
 INSTANCE_NAME="kj-inventory"
 MACHINE_TYPE="${MACHINE_TYPE:-e2-small}"  # e2-small (~$14/mo) or e2-medium (~$27/mo)
-DISK_SIZE="20"
+DISK_SIZE="10"
 IMAGE_FAMILY="debian-12"
 IMAGE_PROJECT="debian-cloud"
 

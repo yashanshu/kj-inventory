@@ -93,6 +93,11 @@ services:
       - PUPPETEER_HEADLESS=${PUPPETEER_HEADLESS:-true}
       - TEST_NOTIFICATION_ON_STARTUP=${TEST_NOTIFICATION_ON_STARTUP:-true}
 
+      # Menu Fetch Configuration
+      - MENU_FETCH_HOUR=${MENU_FETCH_HOUR:-18}
+      - MENU_RESTAURANT_LAT=${MENU_RESTAURANT_LAT:-0}
+      - MENU_RESTAURANT_LNG=${MENU_RESTAURANT_LNG:-0}
+
     volumes:
       - ./scraper/data:/app/data
 
