@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, LayoutDashboard, LogOut, Menu, X, ShoppingCart } from 'lucide-react';
+import { Package, LayoutDashboard, LogOut, Menu, X, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface LayoutProps {
@@ -19,6 +19,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Inventory', href: '/inventory', icon: Package },
     { name: 'Orders', href: '/orders', icon: ShoppingCart },
+    { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
   ];
 
   const handleLogout = () => {
@@ -68,8 +69,8 @@ export function Layout({ children }: LayoutProps) {
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                      ? 'bg-blue-50 text-blue-600 font-medium'
-                      : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-blue-50 text-blue-600 font-medium'
+                    : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <item.icon className="w-5 h-5" />

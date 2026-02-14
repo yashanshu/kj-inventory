@@ -196,6 +196,14 @@ async function main(): Promise<void> {
                 const RESTAURANT_MAP = config.restaurantMap;
                 const restaurantNameFromMap = RESTAURANT_MAP[String(order.restaurantId)] || RESTAURANT_MAP[String(order.restaurant_id)];
 
+                // Reset daily order count at midnight IST
+                const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+                const todayDate = istNow.toISOString().split('T')[0];
+                if (lastOrderDate !== todayDate) {
+                    dailyOrderCount = 0;
+                    lastOrderDate = todayDate;
+                }
+
                 // Increment daily order counter
                 dailyOrderCount++;
 
@@ -341,14 +349,62 @@ async function main(): Promise<void> {
         }
     }
 
+    async function checkMenuFetch(): Promise<void> {
+        // Skip if lat/lng not configured
+        if (config.menuRestaurantLat === 0 && config.menuRestaurantLng === 0) {
+            return;
+        }
+
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const now = new Date(new Date().getTime() + istOffset);
+        const currentHour = now.getUTCHours();
+        const todayStr = now.toISOString().split('T')[0];
+
+        // Trigger at configured hour (default 18 = 6 PM IST)
+        if (currentHour >= config.menuFetchHour) {
+            if (swiggy.lastMenuFetchDate === todayStr) {
+                return; // Already fetched today
+            }
+
+            console.log('\nFetching restaurant menu data...');
+
+            const restaurantIds = Object.keys(config.restaurantMap);
+            if (restaurantIds.length === 0) {
+                console.log('No restaurant IDs configured for menu fetch.');
+                return;
+            }
+
+            for (const ridStr of restaurantIds) {
+                const rid = parseInt(ridStr, 10);
+                if (isNaN(rid)) continue;
+
+                const menuData = await swiggy.fetchMenu(rid, config.menuRestaurantLat, config.menuRestaurantLng);
+                if (menuData) {
+                    await kjApi.upsertMenu({
+                        restaurantId: ridStr,
+                        restaurantName: menuData.restaurantName,
+                        offersJson: JSON.stringify(menuData.offers),
+                        categoriesJson: JSON.stringify(menuData.categories),
+                        fetchedAt: new Date().toISOString(),
+                    });
+                }
+            }
+
+            swiggy.lastMenuFetchDate = todayStr;
+            console.log('Menu fetch completed.');
+        }
+    }
+
     // Run first poll immediately
     await poll();
     await checkDailySummary();
+    await checkMenuFetch();
 
     // Start polling loop
     setInterval(async () => {
         await poll();
         await checkDailySummary();
+        await checkMenuFetch();
     }, config.pollInterval);
 
     // Handle graceful shutdown

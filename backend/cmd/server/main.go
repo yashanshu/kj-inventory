@@ -44,6 +44,7 @@ func main() {
 	alertRepo := repository.NewAlertRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
+	menuRepo := repository.NewMenuRepository(db)
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
@@ -56,6 +57,7 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService, log)
 	movementHandler := handlers.NewMovementHandler(inventoryService, log)
 	orderHandler := handlers.NewOrderHandler(orderRepo, log)
+	menuHandler := handlers.NewMenuHandler(menuRepo, log)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -92,6 +94,9 @@ func main() {
 
 		// Order ingestion (authenticated via token, not JWT)
 		r.Post("/orders/ingest", orderHandler.IngestOrder)
+
+		// Menu data ingestion (authenticated via token, not JWT)
+		r.Post("/menu/update", menuHandler.UpsertMenu)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -131,6 +136,10 @@ func main() {
 			r.Get("/orders", orderHandler.ListOrders)
 			r.Get("/orders/stats", orderHandler.GetOrderStats)
 			r.Get("/orders/{id}", orderHandler.GetOrder)
+
+			// Menu (viewing)
+			r.Get("/menu", menuHandler.ListMenus)
+			r.Get("/menu/{restaurantId}", menuHandler.GetMenu)
 		})
 	})
 

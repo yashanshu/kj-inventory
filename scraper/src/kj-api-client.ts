@@ -58,4 +58,25 @@ export class KJApiClient {
             return false;
         }
     }
+
+    async upsertMenu(payload: {
+        restaurantId: string;
+        restaurantName?: string;
+        offersJson?: string;
+        categoriesJson?: string;
+        fetchedAt: string;
+    }): Promise<boolean> {
+        if (!this.enabled) {
+            return true;
+        }
+
+        try {
+            await this.client.post('/menu/update', payload);
+            console.log(`Menu for restaurant ${payload.restaurantId} sent to KJ Inventory`);
+            return true;
+        } catch (error: any) {
+            console.error(`Failed to send menu to KJ:`, error.message);
+            return false;
+        }
+    }
 }

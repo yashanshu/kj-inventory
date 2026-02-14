@@ -68,4 +68,9 @@ export const config = {
 
     // Test
     testNotificationOnStartup: process.env.TEST_NOTIFICATION_ON_STARTUP === 'true',
+
+    // Menu fetch
+    menuFetchHour: parseInt(process.env.MENU_FETCH_HOUR || '18', 10),  // Default 6 PM IST
+    menuRestaurantLat: parseFloat(process.env.MENU_RESTAURANT_LAT || '0'),
+    menuRestaurantLng: parseFloat(process.env.MENU_RESTAURANT_LNG || '0'),
 };

@@ -81,6 +81,7 @@ export class SwiggyClient {
                     entries.map(([key, value]) => [Number(key), value as string])
                 );
                 this.lastSummaryDate = state.lastSummaryDate || '';
+                this.lastMenuFetchDate = state.lastMenuFetchDate || '';
             }
 
             console.log(`Session loaded (captured: ${this.session?.capturedAt})`);
@@ -304,12 +305,120 @@ export class SwiggyClient {
         }
     }
 
+    /**
+     * Fetch restaurant menu from Swiggy public API
+     */
+    async fetchMenu(restaurantId: number, lat: number, lng: number): Promise<{
+        restaurantName: string;
+        offers: any[];
+        categories: any[];
+    } | null> {
+        try {
+            const url = `https://www.swiggy.com/dapi/menu/pl`;
+            const response = await axios.get(url, {
+                params: {
+                    'page-type': 'REGULAR_MENU',
+                    'complete-menu': 'true',
+                    lat: lat.toString(),
+                    lng: lng.toString(),
+                    restaurantId: restaurantId.toString(),
+                },
+                headers: {
+                    'User-Agent': this.session?.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json',
+                },
+                timeout: 30000,
+            });
+
+            const data = response.data?.data;
+            if (!data) {
+                console.warn(`No menu data returned for restaurant ${restaurantId}`);
+                return null;
+            }
+
+            // Extract restaurant name
+            const restaurantName = data.cards?.find((c: any) =>
+                c.card?.card?.info?.name
+            )?.card?.card?.info?.name || `Restaurant ${restaurantId}`;
+
+            // Extract offers
+            const offers: any[] = [];
+            const offerCards = data.cards?.find((c: any) =>
+                c.card?.card?.gridElements?.infoWithStyle?.offers
+            );
+            if (offerCards) {
+                const rawOffers = offerCards.card.card.gridElements.infoWithStyle.offers || [];
+                for (const offer of rawOffers) {
+                    const info = offer.info || {};
+                    offers.push({
+                        header: info.header || '',
+                        couponCode: info.couponCode || '',
+                        description: info.description || '',
+                        offerType: info.offerType || '',
+                    });
+                }
+            }
+
+            // Extract categories and menu items
+            const categories: any[] = [];
+            const menuCards = data.cards?.find((c: any) =>
+                c.groupedCard?.cardGroupMap?.REGULAR
+            );
+            if (menuCards) {
+                const regularCards = menuCards.groupedCard.cardGroupMap.REGULAR.cards || [];
+                for (const card of regularCards) {
+                    const cardInfo = card.card?.card;
+                    if (!cardInfo) continue;
+
+                    // ItemCategory type contains menu items
+                    if (cardInfo['@type']?.includes('ItemCategory') || cardInfo.itemCards) {
+                        const items = (cardInfo.itemCards || []).map((ic: any) => {
+                            const itemInfo = ic.card?.info || {};
+                            return {
+                                name: itemInfo.name || '',
+                                price: (itemInfo.price || itemInfo.defaultPrice || 0) / 100, // Swiggy stores prices in paisa
+                                description: itemInfo.description || '',
+                                isVeg: itemInfo.itemAttribute?.vegClassifier === 'VEG',
+                                imageId: itemInfo.imageId || '',
+                                inStock: itemInfo.inStock !== false,
+                                variants: (itemInfo.variantsV2?.variantGroups || []).map((vg: any) => ({
+                                    groupName: vg.name || '',
+                                    options: (vg.variations || []).map((v: any) => ({
+                                        name: v.name || '',
+                                        price: (v.price || 0) / 100,
+                                    })),
+                                })),
+                            };
+                        });
+
+                        if (items.length > 0) {
+                            categories.push({
+                                name: cardInfo.title || 'Other',
+                                itemCount: items.length,
+                                items,
+                            });
+                        }
+                    }
+                }
+            }
+
+            console.log(`Menu fetched for ${restaurantName}: ${offers.length} offers, ${categories.length} categories`);
+            return { restaurantName, offers, categories };
+
+        } catch (error: any) {
+            console.error(`Failed to fetch menu for restaurant ${restaurantId}:`, error.message);
+            return null;
+        }
+    }
+
     public lastSummaryDate: string = '';
+    public lastMenuFetchDate: string = '';
 
     private async saveState(): Promise<void> {
         await fs.writeJson(STATE_FILE, {
             lastUpdatedTimes: Object.fromEntries(this.lastUpdatedTimes),
             lastSummaryDate: this.lastSummaryDate,
+            lastMenuFetchDate: this.lastMenuFetchDate,
             savedAt: new Date().toISOString(),
         }, { spaces: 2 });
     }

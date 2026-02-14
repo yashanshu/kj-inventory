@@ -138,7 +138,7 @@ export class NotificationService {
 
     async notifySessionExpired(): Promise<void> {
         const message = '<b>Session Expired!</b>\n\nYour Swiggy session has expired. Please run:\n<code>pnpm run login</code>';
-        const plainMessage = '⚠️ Session Expired!\n\nYour Swiggy session has expired. Please run: pnpm run login';
+        const plainMessage = 'Session Expired!\n\nYour Swiggy session has expired. Please run: pnpm run login';
 
         const promises: Promise<void>[] = [];
 
@@ -165,8 +165,8 @@ export class NotificationService {
     }
 
     async sendTestNotification(): Promise<void> {
-        const message = '<b>🔔 Test Notification</b>\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
-        const waMessage = '🔔 *Test Notification*\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
+        const message = '<b>Test Notification</b>\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
+        const waMessage = '*Test Notification*\n\nThis is a test message from the KJ Inventory Scraper to verify notification channels.';
 
         console.log('Sending test notifications...');
         const promises: Promise<void>[] = [];
@@ -177,26 +177,26 @@ export class NotificationService {
                 this.telegramBot.sendMessage(config.telegramChatId, message, {
                     parse_mode: 'HTML',
                 }).then(() => {
-                    console.log('✅ Telegram test notification sent');
+                    console.log('Telegram test notification sent');
                 }).catch(err => {
-                    console.error('❌ Telegram test notification failed:', err.message);
+                    console.error('Telegram test notification failed:', err.message);
                 })
             );
         } else {
-            console.log('ℹ️ Telegram not enabled or configured for test');
+            console.log('Telegram not enabled or configured for test');
         }
 
         // WhatsApp
         if (this.whatsApp) {
             promises.push(
                 this.whatsApp.sendMessage(waMessage).then(() => {
-                    console.log('✅ WhatsApp test notification sent');
+                    console.log('WhatsApp test notification sent');
                 }).catch(err => {
-                    console.error('❌ WhatsApp test notification failed:', err.message);
+                    console.error('WhatsApp test notification failed:', err.message);
                 })
             );
         } else {
-            console.log('ℹ️ WhatsApp not enabled for test');
+            console.log('WhatsApp not enabled for test');
         }
 
         // FCM
@@ -215,13 +215,13 @@ export class NotificationService {
                         },
                     },
                 }).then(() => {
-                    console.log('✅ FCM test notification sent');
+                    console.log('FCM test notification sent');
                 }).catch(err => {
-                    console.error('❌ FCM test notification failed:', err.message);
+                    console.error('FCM test notification failed:', err.message);
                 })
             );
         } else {
-            console.log('ℹ️ FCM not enabled or configured for test');
+            console.log('FCM not enabled or configured for test');
         }
 
         await Promise.allSettled(promises);
@@ -252,7 +252,7 @@ export class NotificationService {
         const orderTime = this.formatISTDateTime(order.orderDate);
 
         return `
-🔔 <b>New ${order.platform.toUpperCase()} Order${orderNumText}!</b>
+<b>New ${order.platform.toUpperCase()} Order${orderNumText}!</b>
 
 <b>Order ID:</b> <code>${order.orderId}</code>
 <b>Customer:</b> ${order.customerName || 'Unknown'}
@@ -263,7 +263,7 @@ ${areaRow}<b>Time:</b> ${orderTime}
 ${itemsList || '  (items not available)'}
 
 <b>Order Value:</b> ₹${order.orderValue.toFixed(0)}
-${discountRow}<b>💰 Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
+${discountRow}<b>Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
 `.trim();
     }
 
@@ -308,7 +308,7 @@ ${discountRow}<b>💰 Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
         const orderTime = this.formatISTDateTime(order.orderDate);
 
         return `
-🔔 *New ${order.platform.toUpperCase()} Order${orderNumText}!*
+*New ${order.platform.toUpperCase()} Order${orderNumText}!*
 
 *Order ID:* ${order.orderId}
 *Customer:* ${order.customerName || 'Unknown'}
@@ -319,7 +319,7 @@ ${areaRow}*Time:* ${orderTime}
 ${itemsList || '  (items not available)'}
 
 *Order Value:* ₹${order.orderValue.toFixed(0)}
-${discountRow}*💰 Net Earnings:* ₹${order.netEarnings.toFixed(0)}
+${discountRow}*Net Earnings:* ₹${order.netEarnings.toFixed(0)}
 `.trim();
     }
 
@@ -366,42 +366,42 @@ ${discountRow}*💰 Net Earnings:* ₹${order.netEarnings.toFixed(0)}
             : 'Yesterday';
 
         const message = `
-            <b>📊 Daily Business Summary </b>
+            <b>Daily Business Summary</b>
 ${dateStr}
 
-        <b>💰 Sales Performance </b>
+        <b>Sales Performance</b>
 • Net Sales: <b>${netSales} </b>
 • Delivered Orders: <b>${deliveredOrders} </b>
 • Net AOV: <b>${netAov} </b>
 • Cancelled: <b>${cancelledOrders} </b>
 
-            <b>⭐ Ratings & Quality </b>
+            <b>Ratings & Quality</b>
 • Rated Orders: <b>${ratedOrders} </b>
 • Poor Ratings: <b>${poorRatedOrders} </b>
 • Complaints: <b>${totalComplaints} </b>
 
-            <b>📈 Funnel(Conversion) </b>
+            <b>Funnel (Conversion)</b>
 • Impressions: <b>${impressions} </b>
 • Menu Opens: <b>${menuOpens} </b>
 • Cart Builds: <b>${cartBuilds} </b>
             `.trim();
 
         const waMessage = `
-            *📊 Daily Business Summary *
+            *Daily Business Summary*
                 ${dateStr}
     
-*💰 Sales Performance *
+*Sales Performance*
 • Net Sales: * ${netSales}*
 • Delivered Orders: * ${deliveredOrders}*
 • Net AOV: * ${netAov}*
 • Cancelled: * ${cancelledOrders}*
     
-*⭐ Ratings & Quality *
+*Ratings & Quality*
 • Rated Orders: * ${ratedOrders}*
 • Poor Ratings: * ${poorRatedOrders}*
 • Complaints: * ${totalComplaints}*
     
-*📈 Funnel(Conversion) *
+*Funnel (Conversion)*
 • Impressions: * ${impressions}*
 • Menu Opens: * ${menuOpens}*
 • Cart Builds: * ${cartBuilds}*
