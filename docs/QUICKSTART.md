@@ -209,11 +209,16 @@ Production files will be in `frontend/dist/`
 
 ## Deployment Options
 
-### Option 1: Docker (Coming Soon)
+### Option 1: Docker (Recommended)
 ```bash
-# Build and run with docker-compose
-docker-compose up -d
+# Deploy to GCE instance
+./deploy-gce-combined.sh --project YOUR_PROJECT_ID --deploy
+
+# Or run locally with docker-compose
+docker compose -f docker-compose.gce.yml up -d
 ```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment guide.
 
 ### Option 2: Manual Deployment
 

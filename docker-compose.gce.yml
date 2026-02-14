@@ -1,7 +1,7 @@
 services:
   # KJ Inventory Backend + Frontend
   app:
-    image: ${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}
+    image: ${DOCKER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest}
     restart: unless-stopped
 
     ports:
@@ -59,7 +59,7 @@ services:
 
   # Swiggy Order Scraper
   scraper:
-    image: ${SCRAPER_IMAGE:-ghcr.io/yashanshu/kj-inventory-scraper:latest}
+    image: ${SCRAPER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/scraper:latest}
     restart: unless-stopped
 
     environment:

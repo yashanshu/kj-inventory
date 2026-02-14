@@ -16,7 +16,7 @@ Your KJ Inventory project now has a complete Docker-based CI/CD pipeline configu
 2. **[.github/workflows/deploy.yml](.github/workflows/deploy.yml)** - Continuous Deployment
    - Triggers on push to `master` branch
    - Builds multi-stage Docker image
-   - Pushes to GitHub Container Registry (ghcr.io)
+   - Pushes to Google Artifact Registry
    - Deploys to server via SSH
    - Includes health checks and automatic rollback
 
@@ -160,7 +160,7 @@ Monitor at: `https://github.com/yashanshu/kj-inventory/actions`
    ↓
 3. Deploy Workflow Runs (if CI passes)
    ├─ Build Docker image
-   ├─ Push to ghcr.io
+   ├─ Push to Artifact Registry
    └─ SSH to server
    ↓
 4. Server Deployment

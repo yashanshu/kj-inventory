@@ -147,6 +147,9 @@ systemctl start docker
 # Install Docker Compose plugin
 apt-get update && apt-get install -y docker-compose-plugin
 
+# Configure Docker to pull from Artifact Registry
+gcloud auth configure-docker asia-south2-docker.pkg.dev --quiet
+
 # Create app directory structure
 mkdir -p /opt/kj-inventory/{data,logs,scraper/data}
 chmod -R 755 /opt/kj-inventory
@@ -246,15 +249,6 @@ deploy_app() {
         log_warning "No session.json found. You'll need to run login command if not already authenticated."
     fi
 
-    # Copy Docker config for registry authentication
-    mkdir -p "${DEPLOY_DIR}/.docker"
-    if [ -f "${HOME}/.docker/config.json" ]; then
-        cp "${HOME}/.docker/config.json" "${DEPLOY_DIR}/.docker/"
-        log_success "Included Docker configuration for registry authentication"
-    else
-        log_warning "No ~/.docker/config.json found. Deployment may fail if pulling from private registry."
-    fi
-
     # Create systemd service
     cat > "${DEPLOY_DIR}/kj-inventory.service" << 'EOF'
 [Unit]
@@ -279,7 +273,7 @@ EOF
     log_info "Packaging files..."
     TARBALL="${DEPLOY_DIR}/deploy.tar.gz"
     tar -czf "${TARBALL}" -C "${DEPLOY_DIR}" \
-        docker-compose.yml .env scraper .docker kj-inventory.service
+        docker-compose.yml .env scraper kj-inventory.service
 
     # Upload to instance
     log_info "Uploading to instance..."
@@ -296,24 +290,16 @@ cd /opt/kj-inventory
 sudo tar -xzf /tmp/deploy.tar.gz
 
 # Fix permissions for scraper data
-# The scraper service runs as user 1001, but the mapped volume is owned by root
-# because of how we copied/extracted files. We need to fix this.
 sudo chown -R 1001:1001 scraper/data
 
-# Setup Docker Config for Auth
-if [ -f ".docker/config.json" ]; then
-    mkdir -p ~/.docker
-    cp .docker/config.json ~/.docker/
-    # Also copy to root if running as root/sudo
-    sudo mkdir -p /root/.docker
-    sudo cp .docker/config.json /root/.docker/
-fi
+# Configure Docker for Artifact Registry (if not already configured)
+sudo gcloud auth configure-docker asia-south2-docker.pkg.dev --quiet 2>/dev/null || true
 
 sudo cp kj-inventory.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable kj-inventory
 
-# Pull latest images explicitely
+# Pull latest images
 echo "Pulling latest images..."
 sudo docker compose pull
 

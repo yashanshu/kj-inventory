@@ -45,6 +45,8 @@ A modern, mobile-first inventory management system built with Go and React, desi
 - **Quick Adjustments**: Swipe and tap interface for rapid stock changes
 - **Category Management**: Pre-configured restaurant inventory categories
 - **Low Stock Alerts**: Automatic notifications when items run low
+- **Swiggy Order Scraper**: Automatic order ingestion with Telegram/WhatsApp/FCM notifications
+- **Restaurant Menu Tracking**: Daily menu and discount snapshots from Swiggy
 - **Multi-Database Support**: SQLite for simplicity, PostgreSQL for scale
 - **Minimal Memory Usage**: ~20-30MB Docker container
 
@@ -152,6 +154,11 @@ kj-inventory/
 │       ├── pages/           # Page components
 │       ├── services/        # API clients
 │       └── store/           # State management
+├── scraper/                 # Swiggy order scraper (TypeScript)
+│   └── src/
+│       ├── swiggy-client.ts # Swiggy API client
+│       ├── notifier.ts      # Telegram/WhatsApp/FCM notifications
+│       └── index.ts         # Polling entry point
 ├── docs/                    # Documentation
 └── scripts/                 # Deployment scripts
 ```
@@ -203,8 +210,10 @@ make migrate-create       # Create new migration (NAME=xxx)
 - React Query for data fetching
 
 **DevOps:**
-- Docker deployment
+- Docker containerization
 - GitHub Actions CI/CD
+- Google Artifact Registry for images
+- GCE deployment with docker-compose
 - Automated testing
 - Health checks and monitoring
 

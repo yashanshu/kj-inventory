@@ -183,7 +183,7 @@ run_migrations() {
 
     # Run migrations using the migrate binary from the container
     # We'll use docker run with a temporary container to execute migrations
-    local image_name="${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}"
+    local image_name="${DOCKER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest}"
 
     log_info "Running migrations with image: ${image_name}"
 

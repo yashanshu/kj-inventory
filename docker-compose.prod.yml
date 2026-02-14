@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${DOCKER_IMAGE:-ghcr.io/yashanshu/kj-inventory:latest}
+    image: ${DOCKER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest}
     restart: unless-stopped
 
     ports:

@@ -56,6 +56,8 @@ export class SwiggyClient {
     private client: AxiosInstance;
     private session: Session | null = null;
     private lastUpdatedTimes: Map<number, string> = new Map();
+    private consecutiveApiFailures: number = 0;
+    private static readonly API_FAILURE_THRESHOLD = 3;
 
     constructor() {
         this.client = axios.create({
@@ -145,9 +147,25 @@ export class SwiggyClient {
             );
 
             if (response.data.statusCode !== 0) {
-                console.warn(`API returned status: ${response.data.statusMessage}`);
+                this.consecutiveApiFailures++;
+                const failCount = this.consecutiveApiFailures;
+
+                if (failCount === 1) {
+                    console.warn(`⚠️  Swiggy API returned non-success (statusCode: ${response.data.statusCode}, message: ${response.data.statusMessage || '(none)'}). Session may be expired.`);
+                } else if (failCount <= SwiggyClient.API_FAILURE_THRESHOLD) {
+                    console.warn(`⚠️  Swiggy API failure ${failCount}/${SwiggyClient.API_FAILURE_THRESHOLD} — statusCode: ${response.data.statusCode}`);
+                }
+
+                if (failCount >= SwiggyClient.API_FAILURE_THRESHOLD) {
+                    console.error(`🔴 Session appears expired! ${failCount} consecutive API failures. Please re-capture session: pnpm run login`);
+                    return { orders: [], sessionExpired: true };
+                }
+
                 return { orders: [], sessionExpired: false };
             }
+
+            // Reset failure counter on successful response
+            this.consecutiveApiFailures = 0;
 
             // Collect all new orders
             const allOrders: SwiggyOrder[] = [];

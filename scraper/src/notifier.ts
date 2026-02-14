@@ -137,8 +137,8 @@ export class NotificationService {
     }
 
     async notifySessionExpired(): Promise<void> {
-        const message = '<b>Session Expired!</b>\n\nYour Swiggy session has expired. Please run:\n<code>pnpm run login</code>';
-        const plainMessage = 'Session Expired!\n\nYour Swiggy session has expired. Please run: pnpm run login';
+        const message = '🔴 <b>Swiggy Session Expired!</b>\n\nThe scraper can no longer fetch orders — the saved session credentials are no longer valid.\n\n<b>To fix:</b>\n1. Run <code>pnpm run login</code> locally\n2. Copy the new <code>session.json</code> to the server\n3. Restart the scraper\n\nOrders are NOT being tracked until this is resolved.';
+        const plainMessage = '🔴 Swiggy Session Expired!\n\nThe scraper can no longer fetch orders — the saved session credentials are no longer valid.\n\nTo fix:\n1. Run `pnpm run login` locally\n2. Copy the new session.json to the server\n3. Restart the scraper\n\nOrders are NOT being tracked until this is resolved.';
 
         const promises: Promise<void>[] = [];
 

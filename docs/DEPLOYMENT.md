@@ -27,7 +27,7 @@ GitHub Repository (Push to master)
 GitHub Actions CI/CD
     ├─ Build Docker Image
     ├─ Run Tests
-    ├─ Push to ghcr.io
+    ├─ Push to Artifact Registry
     └─ Deploy via SSH
          ↓
 Production Server
@@ -42,7 +42,7 @@ Production Server
 
 - **Container Platform**: Docker + Docker Compose
 - **CI/CD**: GitHub Actions
-- **Container Registry**: GitHub Container Registry (ghcr.io)
+- **Container Registry**: Google Artifact Registry (asia-south2)
 - **Database**: SQLite (upgradeable to PostgreSQL)
 - **Web Server**: Built-in Go server (port 8080)
 
@@ -228,32 +228,24 @@ cat ~/.ssh/github_actions_kj
 # -----END OPENSSH PRIVATE KEY-----
 ```
 
-### Step 2: Enable GitHub Container Registry
+### Step 2: Enable Google Artifact Registry
 
-Follow GitHub's container registry authentication guide (<https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry>), then make sure the repository is configured accordingly:
+The project uses Google Artifact Registry to store Docker images. The GCE VM authenticates natively via its service account, so no Docker login is needed on the server.
 
-1. In your repository, go to **Settings → Actions → General** and under **Workflow permissions** choose **Read and write permissions**, then check **Allow GitHub Actions to create and approve pull requests**. This grants the default `GITHUB_TOKEN` the scopes required to push to `ghcr.io`.
-2. In the same **Settings** area (or at the organization level if this is an org repo), enable **Allow GitHub Actions to create and publish GitHub Packages**. Without this, the workflow run will fail with `installation not allowed to Create organization package`.
-3. Confirm the workflow file (`.github/workflows/deploy.yml`) contains:
+**For GitHub Actions**, you need a GCP service account key:
 
-   ```yaml
-   permissions:
-     contents: read
-     packages: write
-   ```
+1. Create a service account and grant it `roles/artifactregistry.writer` on your repository.
+2. Create a JSON key for the service account.
+3. Add the key contents as a GitHub secret named `GCP_SA_KEY`.
 
-   These permissions align with GitHub’s guidance and unlock Docker pushes that use the workflow’s `GITHUB_TOKEN`.
+The CI/CD workflow uses `google-github-actions/auth` to authenticate and `gcloud auth configure-docker` to push images.
 
-4. For manual `docker push` or troubleshooting outside Actions, create a classic PAT with at least `write:packages` scope (and enable SSO if required), then authenticate locally:
+For manual pulls from your local machine:
 
-   ```bash
-   echo $GHCR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-   ```
-
-After the first successful deployment GitHub will create the registry entry. You can then manage visibility at:
-
-1. Go to: `https://github.com/YOUR_USERNAME/YOUR_REPO/pkgs/container/YOUR_REPO`
-2. Change visibility to "Public" (recommended) or configure access tokens for private access
+```bash
+gcloud auth configure-docker asia-south2-docker.pkg.dev
+docker pull asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest
+```
 
 ---
 
@@ -296,8 +288,8 @@ ssh kjinventory@YOUR_SERVER_IP
 cd /opt/kj-inventory
 
 # Pull latest image manually
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
-docker pull ghcr.io/yashanshu/kj-inventory:latest
+gcloud auth configure-docker asia-south2-docker.pkg.dev
+docker pull asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest
 
 # Run deployment script
 ./scripts/deploy.sh
@@ -551,8 +543,8 @@ cat data/.previous_image_tag
 DOCKER_IMAGE=$(cat data/.previous_image_tag) docker compose -f docker-compose.prod.yml up -d
 
 # OR manually pull a specific version (replace SHA with commit)
-docker pull ghcr.io/yashanshu/kj-inventory:master-abc1234
-DOCKER_IMAGE=ghcr.io/yashanshu/kj-inventory:master-abc1234 docker compose -f docker-compose.prod.yml up -d
+docker pull asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:master-abc1234
+DOCKER_IMAGE=asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:master-abc1234 docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### Rollback Database Only

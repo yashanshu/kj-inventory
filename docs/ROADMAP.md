@@ -386,8 +386,8 @@ frontend/src/pages/NotificationSettingsPage.tsx
 - [ ] Add frontend unit tests (Vitest)
 - [ ] Add E2E tests (Playwright)
 - [ ] Load testing (k6 or Artillery)
-- [ ] Set up CI/CD pipeline
-- [ ] Automated deployment
+- [x] Set up CI/CD pipeline
+- [x] Automated deployment
 
 **Estimated Effort**: 5-6 days
 
@@ -494,14 +494,14 @@ frontend/src/pages/NotificationSettingsPage.tsx
 ## Deployment & DevOps
 
 ### Infrastructure
-- [ ] Docker multi-stage builds
-- [ ] Docker Compose for full stack
+- [x] Docker multi-stage builds
+- [x] Docker Compose for full stack
 - [ ] Kubernetes manifests
 - [ ] Terraform/Pulumi for IaC
-- [ ] Automated backups
-- [ ] Database migration strategy for production
+- [x] Automated backups
+- [x] Database migration strategy for production
 - [ ] Blue-green deployment
-- [ ] Health checks and readiness probes
+- [x] Health checks and readiness probes
 
 ### Monitoring
 - [ ] Set up logging aggregation (ELK/Loki)
