@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 import { SwiggyClient } from './swiggy-client.js';
 import { NotificationService } from './notifier.js';
@@ -9,7 +8,6 @@ async function verifySummary() {
     const swiggy = new SwiggyClient();
     const notifier = new NotificationService();
 
-    // Load session
     const sessionLoaded = await swiggy.loadSession();
     if (!sessionLoaded) {
         console.error('Session not loaded. Please run pnpm run login first.');
@@ -18,34 +16,27 @@ async function verifySummary() {
 
     await notifier.initialize();
 
-    // Calculate Yesterday's range (IST)
-    // Same logic as index.ts
     const istOffset = 5.5 * 60 * 60 * 1000;
     const now = new Date(new Date().getTime() + istOffset);
-
-    // Check what "yesterday" means relative to now
     const todayStr = now.toISOString().split('T')[0];
     console.log(`Current IST Date: ${todayStr}`);
 
     const msPerDay = 24 * 60 * 60 * 1000;
 
-    const getISTMidnightParams = (dateObj: Date) => {
+    const getISTMidnight = (dateObj: Date) => {
         const utcNow = dateObj.getTime();
-        const istNow = utcNow + (5.5 * 60 * 60 * 1000);
+        const istNow = utcNow + istOffset;
         const istMidnight = Math.floor(istNow / msPerDay) * msPerDay;
-        const utcForIstMidnight = istMidnight - (5.5 * 60 * 60 * 1000);
-        return utcForIstMidnight;
+        return istMidnight - istOffset;
     };
 
-    const todayMidnightUTC = getISTMidnightParams(new Date());
+    const todayMidnightUTC = getISTMidnight(new Date());
     const yesterdayMidnightUTC = todayMidnightUTC - msPerDay;
     const yesterdayEndUTC = yesterdayMidnightUTC + msPerDay - 1000;
 
     console.log(`Requesting metrics for:`);
     console.log(`From (UTC): ${new Date(yesterdayMidnightUTC).toISOString()}`);
     console.log(`To   (UTC): ${new Date(yesterdayEndUTC).toISOString()}`);
-    console.log(`From (TS): ${yesterdayMidnightUTC}`);
-    console.log(`To   (TS): ${yesterdayEndUTC}`);
 
     try {
         const metrics = await swiggy.getBusinessMetrics(yesterdayMidnightUTC, yesterdayEndUTC);

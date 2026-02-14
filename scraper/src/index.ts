@@ -1,8 +1,8 @@
 /**
  * Swiggy Order Scraper - Main Entry Point
- * 
+ *
  * Polls the Swiggy partner API for new orders and sends notifications
- * 
+ *
  * Usage:
  *   1. First run: pnpm run login (to authenticate)
  *   2. Then: pnpm start (to start polling)
@@ -88,6 +88,28 @@ function getNextShiftInfo(): { shift: Shift; minutesUntil: number } {
 }
 
 
+/**
+ * Daily order counter — resets at midnight IST
+ */
+let dailyOrderCount = 0;
+let lastCountDate = '';
+
+function getISTDateString(): string {
+    const now = new Date();
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    return ist.toISOString().slice(0, 10); // "2026-02-15"
+}
+
+function getNextOrderNumber(): number {
+    const today = getISTDateString();
+    if (today !== lastCountDate) {
+        dailyOrderCount = 0;
+        lastCountDate = today;
+    }
+    dailyOrderCount++;
+    return dailyOrderCount;
+}
+
 async function main(): Promise<void> {
     console.log('Starting Swiggy Order Scraper...\n');
 
@@ -113,14 +135,16 @@ async function main(): Promise<void> {
         await notifier.sendTestNotification();
     }
 
+    // Initialize date for daily counter
+    lastCountDate = getISTDateString();
+
     console.log(`\nPolling every ${config.pollInterval / 1000}s\n`);
     console.log('-'.repeat(50));
 
     // Main polling loop
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 5;
-    let dailyOrderCount = 0; // Track daily order count for notifications
-    let lastOrderDate = ''; // For resetting daily count
+    const MAX_CONSECUTIVE_ERRORS = 3;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     async function poll(): Promise<void> {
         // Check if restaurant is open
@@ -137,10 +161,18 @@ async function main(): Promise<void> {
             const { orders, sessionExpired } = await swiggy.fetchOrders();
 
             if (sessionExpired) {
-                await notifier.notifySessionExpired();
-                console.error('\nSession expired! Stopping...');
-                console.error('   Run: pnpm run login');
-                process.exit(1);
+                consecutiveErrors++;
+                console.error(`\nSession expired (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`);
+
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    await notifier.notifySessionExpired();
+                    console.error('\nSession expired after 3 attempts. Stopping to avoid spamming server.');
+                    console.error('   Run: pnpm run login');
+                    if (pollTimer) clearInterval(pollTimer);
+                    await deduplicator.save();
+                    process.exit(1);
+                }
+                return;
             }
 
             // Reset error counter on success
@@ -173,12 +205,20 @@ async function main(): Promise<void> {
                 if (!orderValue && order.bill && typeof order.bill === 'object') {
                     orderValue = order.bill.total || 0;
                 }
+                // Fallback: sum from items
+                if (!orderValue || orderValue === 0) {
+                    orderValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                }
 
                 // Restaurant discount (what you're absorbing)
                 const restaurantDiscount = order.total_restaurant_discount || order.restaurant_trade_discount || 0;
 
                 // Net earnings = Order Value - Restaurant Discount
                 const netEarnings = orderValue - restaurantDiscount;
+
+                // Offer/Discount description (e.g., "60% off + 50% off")
+                const offerDescription = order.offer_description ||
+                    (order.discount_descriptions?.length ? order.discount_descriptions.join(' + ') : undefined);
 
                 // Customer & Delivery
                 const customerName = order.customer?.customer_name || order.customerName || 'Unknown';
@@ -188,24 +228,9 @@ async function main(): Promise<void> {
                 const orderDate = order.status?.placed_time || order.status?.ordered_time || order.ordered_time || order.orderDate || new Date().toISOString();
                 const prepTime = order.prep_time_details?.predicted_prep_time || 0;
 
-                // Offer/Discount description (e.g., "60% off + 50% off")
-                const offerDescription = order.offer_description ||
-                    (order.discount_descriptions?.length ? order.discount_descriptions.join(' + ') : undefined);
-
-                // Restaurant Mapping
+                // Restaurant Mapping — from env config, fallback to hardcoded
                 const RESTAURANT_MAP = config.restaurantMap;
                 const restaurantNameFromMap = RESTAURANT_MAP[String(order.restaurantId)] || RESTAURANT_MAP[String(order.restaurant_id)];
-
-                // Reset daily order count at midnight IST
-                const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-                const todayDate = istNow.toISOString().split('T')[0];
-                if (lastOrderDate !== todayDate) {
-                    dailyOrderCount = 0;
-                    lastOrderDate = todayDate;
-                }
-
-                // Increment daily order counter
-                dailyOrderCount++;
 
                 // Extract order details
                 const orderNotification = {
@@ -222,15 +247,18 @@ async function main(): Promise<void> {
                     platform: 'swiggy' as const,
                     status: currentStatus,
                     orderDate,
-                    prepTime,
-                    orderNumber: dailyOrderCount
+                    prepTime
                 };
 
-                // Notify ONLY if status is 'ordered'
-                const notifyStatuses = ['ordered', 'placed', 'confirming'];
+                // Notify for new orders and cancellations
+                const notifyStatuses = ['ordered', 'placed'];
+                const cancelStatuses = ['cancelled', 'canceled'];
 
                 if (notifyStatuses.includes(currentStatus.toLowerCase())) {
-                    await notifier.notifyNewOrder(orderNotification);
+                    const orderNumber = getNextOrderNumber();
+                    await notifier.notifyNewOrder(orderNotification, orderNumber);
+                } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
+                    await notifier.notifyCancelledOrder(orderNotification);
                 } else {
                     console.log(`   Skipping notification for status: ${currentStatus}`);
                 }
@@ -241,7 +269,7 @@ async function main(): Promise<void> {
                     externalOrderId: orderId,
                     orderDate,
                     customerName,
-                    totalAmount: orderValue, // Order value (before restaurant discount)
+                    totalAmount: orderValue,
                     status: currentStatus,
                     itemsJson: JSON.stringify(orderNotification.items),
                     rawData: JSON.stringify(order),
@@ -258,8 +286,10 @@ async function main(): Promise<void> {
             console.error(`\nPoll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error.message);
 
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                console.error('\nToo many consecutive errors. Stopping.');
-                await notifier.notifySessionExpired(); // Notify user something is wrong
+                console.error('\n3 consecutive errors. Sending notification and stopping.');
+                await notifier.notifyError(error.message);
+                if (pollTimer) clearInterval(pollTimer);
+                await deduplicator.save();
                 process.exit(1);
             }
         }
@@ -269,83 +299,33 @@ async function main(): Promise<void> {
         const istOffset = 5.5 * 60 * 60 * 1000;
         const now = new Date(new Date().getTime() + istOffset);
         const currentHour = now.getUTCHours();
-
-        // Format today's date as YYYY-MM-DD for tracking
         const todayStr = now.toISOString().split('T')[0];
 
-        // Trigger at 7 AM
-        if (currentHour === 7) {
-            if (swiggy.lastSummaryDate === todayStr) {
-                // Already sent today
-                return;
-            }
+        // Trigger at 7 AM IST
+        if (currentHour !== 7) return;
+        if (swiggy.lastSummaryDate === todayStr) return; // Already sent today
 
-            console.log('\nGenerating Daily Summary...');
+        console.log('\nGenerating Daily Summary...');
 
-            // Calculate Yesterday's range (IST)
-            // Yesterday Start: Today 00:00 IST - 24 hours
-            const todayStartIST = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); // This is local time if server is IST, but let's be safe
+        const msPerDay = 24 * 60 * 60 * 1000;
 
-            // Allow native Date to handle "yesterday" via setDate
-            const yesterday = new Date(now);
-            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-            yesterday.setUTCHours(0, 0, 0, 0);
+        // Get IST midnight as UTC timestamp
+        const getISTMidnight = (dateObj: Date) => {
+            const utcNow = dateObj.getTime();
+            const istNow = utcNow + istOffset;
+            const istMidnight = Math.floor(istNow / msPerDay) * msPerDay;
+            return istMidnight - istOffset;
+        };
 
-            const yesterdayStart = yesterday.getTime();
-            const yesterdayEnd = yesterday.getTime() + (24 * 60 * 60 * 1000) - 1;
+        const todayMidnightUTC = getISTMidnight(new Date());
+        const yesterdayMidnightUTC = todayMidnightUTC - msPerDay;
+        const yesterdayEndUTC = yesterdayMidnightUTC + msPerDay - 1000;
 
-            // Swiggy expects milliseconds
-            // NOTE: The timestamps need to be accurate for Swiggy's backend.
-            // Let's rely on standard Date objects. 
-            // Swiggy likely uses the timestamp values directly.
+        const metrics = await swiggy.getBusinessMetrics(yesterdayMidnightUTC, yesterdayEndUTC);
 
-            const msPerDay = 24 * 60 * 60 * 1000;
-            const currentTimestamp = Date.now();
-            // yesterday start = midnight today - 24h
-            // We need to be careful with timezones.
-            // The user example: fromDate: 1770489000000 (Sat Feb 07 2026 18:30:00 GMT+0000) -> Feb 8 00:00 IST
-            // This confirms we need correct timestamps.
-
-            // Helper to get IST midnight timestamp
-            const getISTMidnightParams = (dateObj: Date) => {
-                // Create string in IST
-                const options: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' };
-                const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(dateObj);
-                // en-CA gives YYYY-MM-DD
-                // Actually Intl formats are tricky.
-                // Let's use simple offset math.
-
-                // Current UTC time + 5.5h = Current IST time
-                // Floor to day
-                // Subtract 5.5h = UTC time for IST midnight
-
-                const utcNow = dateObj.getTime();
-                const istNow = utcNow + (5.5 * 60 * 60 * 1000);
-                const istMidnight = Math.floor(istNow / msPerDay) * msPerDay;
-                const utcForIstMidnight = istMidnight - (5.5 * 60 * 60 * 1000);
-                return utcForIstMidnight;
-            };
-
-            const todayMidnightUTC = getISTMidnightParams(new Date());
-            const yesterdayMidnightUTC = todayMidnightUTC - msPerDay;
-            const yesterdayEndUTC = yesterdayMidnightUTC + msPerDay - 1000; // End of day
-
-            const metrics = await swiggy.getBusinessMetrics(yesterdayMidnightUTC, yesterdayEndUTC);
-
-            if (metrics) {
-                await notifier.sendDailySummary(metrics);
-                swiggy.lastSummaryDate = todayStr;
-                // Save state via a public method or force save (SwiggyClient handles save internally on fetchOrders, but we should force it or add save method)
-                // We'll rely on the next fetchOrders to save, or we can add a save method.
-                // For now, let's just let it save on next poll, or we can make sure SwiggyClient saves `lastSummaryDate` when we modify it.
-                // The `swiggy.lastSummaryDate` is public, but saving is private.
-                // Let's modify SwiggyClient to allow saving state publically or just rely on next poll. 
-                // A better approach is to just call a dummy fetch or expose save.
-                // But wait, I modified saveState to include it. I just need to trigger it.
-                // I'll assume standard polling will save it soon enough.
-                // But if crash happens right after sending, we might duplicate.
-                // Risk is acceptable for now.
-            }
+        if (metrics) {
+            await notifier.sendDailySummary(metrics);
+            swiggy.lastSummaryDate = todayStr;
         }
     }
 
@@ -360,39 +340,35 @@ async function main(): Promise<void> {
         const currentHour = now.getUTCHours();
         const todayStr = now.toISOString().split('T')[0];
 
-        // Trigger at configured hour (default 18 = 6 PM IST)
-        if (currentHour >= config.menuFetchHour) {
-            if (swiggy.lastMenuFetchDate === todayStr) {
-                return; // Already fetched today
-            }
+        if (currentHour < config.menuFetchHour) return;
+        if (swiggy.lastMenuFetchDate === todayStr) return; // Already fetched today
 
-            console.log('\nFetching restaurant menu data...');
+        console.log('\nFetching restaurant menu data...');
 
-            const restaurantIds = Object.keys(config.restaurantMap);
-            if (restaurantIds.length === 0) {
-                console.log('No restaurant IDs configured for menu fetch.');
-                return;
-            }
-
-            for (const ridStr of restaurantIds) {
-                const rid = parseInt(ridStr, 10);
-                if (isNaN(rid)) continue;
-
-                const menuData = await swiggy.fetchMenu(rid, config.menuRestaurantLat, config.menuRestaurantLng);
-                if (menuData) {
-                    await kjApi.upsertMenu({
-                        restaurantId: ridStr,
-                        restaurantName: menuData.restaurantName,
-                        offersJson: JSON.stringify(menuData.offers),
-                        categoriesJson: JSON.stringify(menuData.categories),
-                        fetchedAt: new Date().toISOString(),
-                    });
-                }
-            }
-
-            swiggy.lastMenuFetchDate = todayStr;
-            console.log('Menu fetch completed.');
+        const restaurantIds = Object.keys(config.restaurantMap);
+        if (restaurantIds.length === 0) {
+            console.log('No restaurant IDs configured for menu fetch.');
+            return;
         }
+
+        for (const ridStr of restaurantIds) {
+            const rid = parseInt(ridStr, 10);
+            if (isNaN(rid)) continue;
+
+            const menuData = await swiggy.fetchMenu(rid, config.menuRestaurantLat, config.menuRestaurantLng);
+            if (menuData) {
+                await kjApi.upsertMenu({
+                    restaurantId: ridStr,
+                    restaurantName: menuData.restaurantName,
+                    offersJson: JSON.stringify(menuData.offers),
+                    categoriesJson: JSON.stringify(menuData.categories),
+                    fetchedAt: new Date().toISOString(),
+                });
+            }
+        }
+
+        swiggy.lastMenuFetchDate = todayStr;
+        console.log('Menu fetch completed.');
     }
 
     // Run first poll immediately
@@ -401,7 +377,7 @@ async function main(): Promise<void> {
     await checkMenuFetch();
 
     // Start polling loop
-    setInterval(async () => {
+    pollTimer = setInterval(async () => {
         await poll();
         await checkDailySummary();
         await checkMenuFetch();
@@ -410,12 +386,14 @@ async function main(): Promise<void> {
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
         console.log('\n\nShutting down...');
+        if (pollTimer) clearInterval(pollTimer);
         await deduplicator.save();
         process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
         console.log('\n\nShutting down...');
+        if (pollTimer) clearInterval(pollTimer);
         await deduplicator.save();
         process.exit(0);
     });
@@ -444,8 +422,8 @@ function extractItems(order: any): { name: string; quantity: number; price: numb
         } else if (!price && item.item_total) {
             price = item.item_total / quantity;
         } else if (!price && item.final_sub_total) {
-            // final_sub_total is usually after discount logic on the item, 
-            // but if it's the only thing we have, we might have to use it. 
+            // final_sub_total is usually after discount logic on the item,
+            // but if it's the only thing we have, we might have to use it.
             // Preference is 'total' or 'sub_total' for gross price.
             price = item.final_sub_total / quantity;
         }

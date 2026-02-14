@@ -10,6 +10,7 @@ import path from 'path';
 
 interface Session {
     cookies: { name: string; value: string }[];
+    accessToken: string;
     userAgent: string;
     headers: Record<string, string>;
     restaurantIds: number[];
@@ -17,7 +18,7 @@ interface Session {
 }
 
 interface RestaurantTimeMap {
-    rest_rid: number;
+    restaurantId: number;
     lastUpdatedTime: string;
 }
 
@@ -39,13 +40,24 @@ interface FetchResponse {
     restaurantData: {
         restaurantId: number;
         lastUpdatedTime: string;
+        serverTime: string;
+        lastOrderEventTimestamps: Record<string, any>;
+        isServiceable: boolean;
+        batches: Record<string, any>;
+        lastCachePollTime: number;
+        isOpen: boolean;
+        stressInfo: { stress: boolean };
+        updatedOrderIds: string[];
         orders: SwiggyOrder[];
         popOrders: SwiggyOrder[];
-        updatedOrderIds: string[];
     }[];
+    flags: Record<string, any>;
+    force_update: any;
+    optional_update: any;
     config: {
         pollingInterval: string;
     };
+    battery_status_time: number;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -59,9 +71,12 @@ export class SwiggyClient {
     private consecutiveApiFailures: number = 0;
     private static readonly API_FAILURE_THRESHOLD = 3;
 
+    public lastSummaryDate: string = '';
+    public lastMenuFetchDate: string = '';
+
     constructor() {
         this.client = axios.create({
-            baseURL: 'https://partner.swiggy.com',
+            baseURL: 'https://rms.swiggy.com',
             timeout: 30000,
         });
     }
@@ -87,6 +102,7 @@ export class SwiggyClient {
             }
 
             console.log(`Session loaded (captured: ${this.session?.capturedAt})`);
+            console.log(`Access token: ${this.session?.accessToken ? this.session.accessToken.substring(0, 8) + '...' : 'MISSING'}`);
             console.log(`Restaurants: ${this.session?.restaurantIds.join(', ') || 'Will auto-detect'}`);
 
             return true;
@@ -96,24 +112,24 @@ export class SwiggyClient {
         }
     }
 
-    private getCookieHeader(): string {
-        if (!this.session?.cookies) return '';
-        return this.session.cookies
-            .map(c => `${c.name}=${c.value}`)
-            .join('; ');
-    }
-
     private getHeaders(): Record<string, string> {
         return {
             ...this.session?.headers,
             'User-Agent': this.session?.userAgent || '',
-            'Cookie': this.getCookieHeader(),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Referer': 'https://partner.swiggy.com/',
+            'Origin': 'https://partner.swiggy.com',
+            'accesstoken': this.session?.accessToken || '',
+            'access_token': this.session?.accessToken || '',
         };
     }
 
     private getTimestamp(): string {
-        // Format: 2026-02-06T10:51:36
-        return new Date().toISOString().replace(/\.\d{3}Z$/, '');
+        // Format: 2026-02-15T01:51:35 (IST, not UTC — API expects local IST times)
+        const now = new Date();
+        const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+        return ist.toISOString().replace(/\.\d{3}Z$/, '');
     }
 
     async fetchOrders(): Promise<{ orders: SwiggyOrder[]; sessionExpired: boolean }> {
@@ -130,7 +146,7 @@ export class SwiggyClient {
         // Build request payload with last updated times
         const now = this.getTimestamp();
         const restaurantTimeMap: RestaurantTimeMap[] = restaurantIds.map(id => ({
-            rest_rid: id,
+            restaurantId: id,
             lastUpdatedTime: this.lastUpdatedTimes.get(id) || now,
         }));
 
@@ -141,7 +157,7 @@ export class SwiggyClient {
 
         try {
             const response = await this.client.post<FetchResponse>(
-                '/orders/v1/fetch',
+                '/orders/v1/fetchOrders',
                 payload,
                 { headers: this.getHeaders() }
             );
@@ -151,13 +167,12 @@ export class SwiggyClient {
                 const failCount = this.consecutiveApiFailures;
 
                 if (failCount === 1) {
-                    console.warn(`⚠️  Swiggy API returned non-success (statusCode: ${response.data.statusCode}, message: ${response.data.statusMessage || '(none)'}). Session may be expired.`);
+                    console.warn(`API returned non-success (statusCode: ${response.data.statusCode}, message: ${response.data.statusMessage || '(none)'}). Session may be expired.`);
                 } else if (failCount <= SwiggyClient.API_FAILURE_THRESHOLD) {
-                    console.warn(`⚠️  Swiggy API failure ${failCount}/${SwiggyClient.API_FAILURE_THRESHOLD} — statusCode: ${response.data.statusCode}`);
+                    console.warn(`API failure ${failCount}/${SwiggyClient.API_FAILURE_THRESHOLD} — statusCode: ${response.data.statusCode}`);
                 }
 
                 if (failCount >= SwiggyClient.API_FAILURE_THRESHOLD) {
-                    console.error(`🔴 Session appears expired! ${failCount} consecutive API failures. Please re-capture session: pnpm run login`);
                     return { orders: [], sessionExpired: true };
                 }
 
@@ -296,8 +311,6 @@ export class SwiggyClient {
         `;
 
         try {
-            // Use a separate axios instance or override baseURL for this request
-            // We use the same headers (cookies) as the partner API
             const response = await axios.post(
                 'https://vhc-composer.swiggy.com/query',
                 { query, variables: {} },
@@ -323,17 +336,13 @@ export class SwiggyClient {
         }
     }
 
-    /**
-     * Fetch restaurant menu from Swiggy public API
-     */
     async fetchMenu(restaurantId: number, lat: number, lng: number): Promise<{
         restaurantName: string;
         offers: any[];
         categories: any[];
     } | null> {
         try {
-            const url = `https://www.swiggy.com/dapi/menu/pl`;
-            const response = await axios.get(url, {
+            const response = await axios.get('https://www.swiggy.com/dapi/menu/pl', {
                 params: {
                     'page-type': 'REGULAR_MENU',
                     'complete-menu': 'true',
@@ -388,7 +397,6 @@ export class SwiggyClient {
                     const cardInfo = card.card?.card;
                     if (!cardInfo) continue;
 
-                    // ItemCategory type contains menu items
                     if (cardInfo['@type']?.includes('ItemCategory') || cardInfo.itemCards) {
                         const items = (cardInfo.itemCards || []).map((ic: any) => {
                             const itemInfo = ic.card?.info || {};
@@ -428,9 +436,6 @@ export class SwiggyClient {
             return null;
         }
     }
-
-    public lastSummaryDate: string = '';
-    public lastMenuFetchDate: string = '';
 
     private async saveState(): Promise<void> {
         await fs.writeJson(STATE_FILE, {
