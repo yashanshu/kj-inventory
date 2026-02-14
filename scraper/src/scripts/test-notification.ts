@@ -36,7 +36,7 @@ async function testNotifs() {
     };
 
     console.log('\nSending Test Order...');
-    await notifier.notifyNewOrder(testOrder);
+    await notifier.notifyNewOrder(testOrder, testOrder.orderNumber);
 
     console.log('\nWaiting 5 seconds before exit...');
     await new Promise(r => setTimeout(r, 5000));
