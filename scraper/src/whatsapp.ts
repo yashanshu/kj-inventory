@@ -137,4 +137,17 @@ export class WhatsAppService {
     isClientReady(): boolean {
         return this.isReady;
     }
+
+    async destroy(): Promise<void> {
+        if (this.client) {
+            try {
+                await this.client.destroy();
+                console.log('WhatsApp client destroyed');
+            } catch (error) {
+                console.error('Error destroying WhatsApp client:', error);
+            }
+            this.client = null;
+            this.isReady = false;
+        }
+    }
 }

@@ -396,19 +396,16 @@ async function main(): Promise<void> {
     pollTimer = setInterval(runPollCycle, config.pollInterval);
 
     // Handle graceful shutdown
-    process.on('SIGINT', async () => {
+    async function shutdown(): Promise<void> {
         console.log('\n\nShutting down...');
         if (pollTimer) clearInterval(pollTimer);
         await deduplicator.save();
+        await notifier.shutdown();
         process.exit(0);
-    });
+    }
 
-    process.on('SIGTERM', async () => {
-        console.log('\n\nShutting down...');
-        if (pollTimer) clearInterval(pollTimer);
-        await deduplicator.save();
-        process.exit(0);
-    });
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 }
 
 /**

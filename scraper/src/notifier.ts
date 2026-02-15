@@ -413,4 +413,10 @@ ${itemsList || '  (items not available)'}
 ${discountRow}*Net Earnings:* ₹${order.netEarnings.toFixed(0)}
 `.trim();
     }
+
+    async shutdown(): Promise<void> {
+        if (this.whatsApp) {
+            await this.whatsApp.destroy();
+        }
+    }
 }
