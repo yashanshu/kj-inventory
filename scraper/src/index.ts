@@ -14,6 +14,7 @@ import { NotificationService } from './notifier.js';
 import { Deduplicator } from './deduplicator.js';
 import { KJApiClient } from './kj-api-client.js';
 import { config } from './config.js';
+import { createServer } from './server.js';
 
 interface Shift {
     open: number;  // 0-23
@@ -329,20 +330,7 @@ async function main(): Promise<void> {
         }
     }
 
-    async function checkMenuFetch(): Promise<void> {
-        // Skip if lat/lng not configured
-        if (config.menuRestaurantLat === 0 && config.menuRestaurantLng === 0) {
-            return;
-        }
-
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const now = new Date(new Date().getTime() + istOffset);
-        const currentHour = now.getUTCHours();
-        const todayStr = now.toISOString().split('T')[0];
-
-        if (currentHour < config.menuFetchHour) return;
-        if (swiggy.lastMenuFetchDate === todayStr) return; // Already fetched today
-
+    async function fetchMenus(): Promise<void> {
         console.log('\nFetching restaurant menu data...');
 
         const restaurantIds = Object.keys(config.restaurantMap);
@@ -367,8 +355,25 @@ async function main(): Promise<void> {
             }
         }
 
-        swiggy.lastMenuFetchDate = todayStr;
         console.log('Menu fetch completed.');
+    }
+
+    async function checkMenuFetch(): Promise<void> {
+        // Skip if lat/lng not configured
+        if (config.menuRestaurantLat === 0 && config.menuRestaurantLng === 0) {
+            return;
+        }
+
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const now = new Date(new Date().getTime() + istOffset);
+        const currentHour = now.getUTCHours();
+        const todayStr = now.toISOString().split('T')[0];
+
+        if (currentHour < config.menuFetchHour) return;
+        if (swiggy.lastMenuFetchDate === todayStr) return; // Already fetched today
+
+        await fetchMenus();
+        swiggy.lastMenuFetchDate = todayStr;
     }
 
     async function runPollCycle(): Promise<void> {
@@ -388,6 +393,23 @@ async function main(): Promise<void> {
             console.error('Error in checkMenuFetch():', error);
         }
     }
+
+    function restartPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(runPollCycle, config.pollInterval);
+        console.log(`Polling restarted with interval ${config.pollInterval}ms`);
+    }
+
+    // Start API server
+    createServer({
+        notifier,
+        swiggy,
+        kjApi,
+        runPollCycle,
+        forceMenuFetch: fetchMenus,
+        getPollingState: () => ({ running: pollTimer !== null, consecutiveErrors }),
+        restartPolling,
+    });
 
     // Run first poll immediately
     await runPollCycle();

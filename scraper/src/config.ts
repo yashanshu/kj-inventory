@@ -1,6 +1,6 @@
 import 'dotenv/config';
 
-interface Shift {
+export interface Shift {
     open: number;
     close: number;
 }
@@ -68,6 +68,9 @@ export const config = {
 
     // Test notification on startup
     testNotificationOnStartup: process.env.TEST_NOTIFICATION_ON_STARTUP === 'true',
+
+    // API server
+    apiPort: parseInt(process.env.API_PORT || '3001', 10),
 
     // Menu fetch settings
     menuFetchHour: parseInt(process.env.MENU_FETCH_HOUR || '18', 10),

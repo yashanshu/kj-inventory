@@ -62,6 +62,9 @@ services:
     image: ${SCRAPER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/scraper:latest}
     restart: unless-stopped
 
+    ports:
+      - "3001:3001"
+
     environment:
       # Swiggy Configuration
       - SWIGGY_MOBILE=${SWIGGY_MOBILE}

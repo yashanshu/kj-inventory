@@ -41,6 +41,35 @@ pnpm start
 3. Get FCM token from your Android app
 4. Set `FIREBASE_FCM_TOKEN` in `.env`
 
+## API Server
+
+The scraper exposes a lightweight HTTP API (Hono) on port `3001` (configurable via `API_PORT`) for runtime control.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Status, uptime, error count |
+| `GET` | `/config` | Current runtime config |
+| `POST` | `/poll-now` | Trigger immediate poll cycle |
+| `PUT` | `/config/shifts` | Update restaurant shifts |
+| `PUT` | `/config/interval` | Update polling interval |
+| `POST` | `/test-notification` | Send test notification on all channels |
+| `POST` | `/fetch-menu` | Trigger menu fetch immediately |
+
+Examples:
+```bash
+# Check health
+curl localhost:3001/health
+
+# Change polling interval to 60s
+curl -X PUT localhost:3001/config/interval -H 'Content-Type: application/json' -d '{"intervalMs":60000}'
+
+# Update shifts
+curl -X PUT localhost:3001/config/shifts -H 'Content-Type: application/json' -d '{"shifts":[{"open":12,"close":16},{"open":19,"close":3}]}'
+
+# Trigger test notification
+curl -X POST localhost:3001/test-notification
+```
+
 ## Session Expiry
 
 Swiggy sessions typically last days/weeks. If session expires:
