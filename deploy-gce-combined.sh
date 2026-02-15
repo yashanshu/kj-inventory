@@ -172,6 +172,16 @@ STARTUP_EOF
     # Clean up startup script
     rm -f "${STARTUP_SCRIPT}"
     
+    # Create firewall rule for SSH if it does not exist
+    if ! gcloud compute firewall-rules describe allow-ssh --project="${PROJECT_ID}" &>/dev/null; then
+        log_info "Creating SSH firewall rule..."
+        gcloud compute firewall-rules create allow-ssh \
+            --project="${PROJECT_ID}" \
+            --allow=tcp:22 \
+            --target-tags=http-server \
+            --description="Allow SSH traffic"
+    fi
+
     # Create firewall rule for HTTP if it does not exist
     if ! gcloud compute firewall-rules describe allow-http --project="${PROJECT_ID}" &>/dev/null; then
         log_info "Creating HTTP firewall rule..."
@@ -278,12 +288,14 @@ EOF
     # Upload to instance
     log_info "Uploading to instance..."
     gcloud compute scp "${TARBALL}" "${INSTANCE_NAME}:/tmp/deploy.tar.gz" \
-        --zone="${ZONE}" --project="${PROJECT_ID}"
+        --zone="${ZONE}" --project="${PROJECT_ID}" \
+        --tunnel-through-iap
 
     # Deploy on instance
     log_info "Installing on instance..."
     gcloud compute ssh "${INSTANCE_NAME}" \
         --zone="${ZONE}" --project="${PROJECT_ID}" \
+        --tunnel-through-iap \
         --command='
 set -e
 cd /opt/kj-inventory
@@ -302,6 +314,17 @@ sudo systemctl enable kj-inventory
 # Pull latest images
 echo "Pulling latest images..."
 sudo docker compose pull
+
+# Run database migrations before starting containers
+echo "Running database migrations..."
+APP_IMAGE=$(sudo docker compose config --images | head -1)
+sudo docker run --rm \
+    -v kj-inventory_app-data:/app/data \
+    "${APP_IMAGE}" \
+    /usr/local/bin/migrate \
+    -path /app/migrations/sqlite \
+    -database "sqlite3:///app/data/inventory.db?_fk=1" \
+    up
 
 sudo systemctl restart kj-inventory
 echo "Waiting for services to start..."
@@ -332,7 +355,8 @@ sudo docker compose logs --tail=10
 ###############################################################################
 ssh_to_vm() {
     gcloud compute ssh "${INSTANCE_NAME}" \
-        --zone="${ZONE}" --project="${PROJECT_ID}"
+        --zone="${ZONE}" --project="${PROJECT_ID}" \
+        --tunnel-through-iap
 }
 
 ###############################################################################
@@ -341,6 +365,7 @@ ssh_to_vm() {
 view_logs() {
     gcloud compute ssh "${INSTANCE_NAME}" \
         --zone="${ZONE}" --project="${PROJECT_ID}" \
+        --tunnel-through-iap \
         --command='sudo docker compose -f /opt/kj-inventory/docker-compose.yml logs -f --tail=100'
 }
 

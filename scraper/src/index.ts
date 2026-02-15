@@ -371,17 +371,29 @@ async function main(): Promise<void> {
         console.log('Menu fetch completed.');
     }
 
+    async function runPollCycle(): Promise<void> {
+        try {
+            await poll();
+        } catch (error) {
+            console.error('Unexpected error in poll():', error);
+        }
+        try {
+            await checkDailySummary();
+        } catch (error) {
+            console.error('Error in checkDailySummary():', error);
+        }
+        try {
+            await checkMenuFetch();
+        } catch (error) {
+            console.error('Error in checkMenuFetch():', error);
+        }
+    }
+
     // Run first poll immediately
-    await poll();
-    await checkDailySummary();
-    await checkMenuFetch();
+    await runPollCycle();
 
     // Start polling loop
-    pollTimer = setInterval(async () => {
-        await poll();
-        await checkDailySummary();
-        await checkMenuFetch();
-    }, config.pollInterval);
+    pollTimer = setInterval(runPollCycle, config.pollInterval);
 
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
