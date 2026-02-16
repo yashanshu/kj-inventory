@@ -47,6 +47,12 @@ func (r *OrderRepository) Create(o *domain.ExternalOrder) error {
 	return nil
 }
 
+// UpdateStatus updates the status of an existing order
+func (r *OrderRepository) UpdateStatus(id int64, status string) error {
+	_, err := r.db.Exec("UPDATE external_orders SET status = ? WHERE id = ?", status, id)
+	return err
+}
+
 // GetByExternalID finds an order by platform and external ID
 func (r *OrderRepository) GetByExternalID(platform, externalID string) (*domain.ExternalOrder, error) {
 	var o domain.ExternalOrder

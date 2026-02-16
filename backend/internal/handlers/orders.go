@@ -45,7 +45,15 @@ func (h *OrderHandler) IngestOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		// Order already exists, return success (idempotent)
+		// Order exists — update status if changed
+		if existing.Status != req.Status && req.Status != "" {
+			if err := h.repo.UpdateStatus(existing.ID, req.Status); err != nil {
+				h.log.Error("Failed to update order status", err)
+				http.Error(w, "Failed to update order", http.StatusInternalServerError)
+				return
+			}
+			h.log.Info("Order status updated: " + req.ExternalOrderID + " -> " + req.Status)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "exists",

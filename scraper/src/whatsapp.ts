@@ -3,9 +3,14 @@ import qrcode from 'qrcode-terminal';
 import path from 'path';
 import { config } from './config.js';
 
+const SEND_TIMEOUT_MS = 15_000; // 15s max for sendMessage
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export class WhatsAppService {
     private client: Client | null = null;
     private isReady = false;
+    private consecutiveFailures = 0;
+    private restarting = false;
 
     async initialize(): Promise<void> {
         if (!config.enableWhatsApp) {
@@ -127,10 +132,43 @@ export class WhatsAppService {
                 formattedTo += '@c.us';
             }
 
-            await this.client.sendMessage(formattedTo, text);
+            // Race against timeout to prevent blocking the poll cycle
+            const sendPromise = this.client.sendMessage(formattedTo, text);
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('WhatsApp send timed out after 15s')), SEND_TIMEOUT_MS)
+            );
+
+            await Promise.race([sendPromise, timeoutPromise]);
             console.log(`WhatsApp message sent to ${to}`);
+            this.consecutiveFailures = 0;
         } catch (error) {
+            this.consecutiveFailures++;
             console.error('Failed to send WhatsApp message:', error);
+
+            if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                console.warn(`WhatsApp failed ${this.consecutiveFailures} times in a row, restarting client...`);
+                await this.restart();
+            }
+        }
+    }
+
+    private async restart(): Promise<void> {
+        if (this.restarting) return;
+        this.restarting = true;
+
+        try {
+            this.isReady = false;
+            if (this.client) {
+                try { await this.client.destroy(); } catch {}
+            }
+            this.client = null;
+            this.consecutiveFailures = 0;
+
+            // Re-initialize after a brief pause
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            await this.initialize();
+        } finally {
+            this.restarting = false;
         }
     }
 

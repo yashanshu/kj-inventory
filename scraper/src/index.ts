@@ -146,6 +146,7 @@ async function main(): Promise<void> {
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 3;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let pollInProgress = false;
 
     async function poll(): Promise<void> {
         // Check if restaurant is open
@@ -197,6 +198,9 @@ async function main(): Promise<void> {
                 }
 
                 console.log(`   Processing order: ${orderId} (${currentStatus})`);
+
+                // Mark as seen immediately to prevent re-processing if notifications block
+                deduplicator.markSeen(orderId, currentStatus);
 
                 const items = extractItems(order);
 
@@ -275,9 +279,6 @@ async function main(): Promise<void> {
                     itemsJson: JSON.stringify(orderNotification.items),
                     rawData: JSON.stringify(order),
                 });
-
-                // Mark as seen with current status
-                deduplicator.markSeen(orderId, currentStatus);
             }
 
             await deduplicator.save();
@@ -377,6 +378,10 @@ async function main(): Promise<void> {
     }
 
     async function runPollCycle(): Promise<void> {
+        if (pollInProgress) {
+            return; // Skip if previous cycle is still running
+        }
+        pollInProgress = true;
         try {
             await poll();
         } catch (error) {
@@ -391,6 +396,8 @@ async function main(): Promise<void> {
             await checkMenuFetch();
         } catch (error) {
             console.error('Error in checkMenuFetch():', error);
+        } finally {
+            pollInProgress = false;
         }
     }
 
