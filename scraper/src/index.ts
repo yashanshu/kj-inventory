@@ -148,6 +148,10 @@ async function main(): Promise<void> {
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let pollInProgress = false;
 
+    // Prep-time overdue tracking
+    // Maps orderId -> { dueAt: timestamp, notification: OrderNotification, fired: boolean }
+    const prepTimerMap = new Map<string, { dueAt: number; notification: any; fired: boolean }>();
+
     async function poll(): Promise<void> {
         // Check if restaurant is open
         if (!isRestaurantOpen()) {
@@ -205,15 +209,21 @@ async function main(): Promise<void> {
                 const items = extractItems(order);
 
                 // Financials extraction
-                // bill = Order Value (item totals + packing + GST - what the order is worth)
+                // bill = Order Value (item totals + packing)
                 let orderValue = order.bill || 0;
                 if (!orderValue && order.bill && typeof order.bill === 'object') {
                     orderValue = order.bill.total || 0;
                 }
-                // Fallback: sum from items
+                // Fallback: sum from items MRP
                 if (!orderValue || orderValue === 0) {
                     orderValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
                 }
+
+                // Subtotal = sum of item MRPs (sub_total before any discount)
+                const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+                // Packing charge
+                const packingCharge = order.cart?.charges?.packing_charge || 0;
 
                 // Restaurant discount (what you're absorbing)
                 const restaurantDiscount = order.total_restaurant_discount || order.restaurant_trade_discount || 0;
@@ -228,10 +238,11 @@ async function main(): Promise<void> {
                 // Customer & Delivery
                 const customerName = order.customer?.customer_name || order.customerName || 'Unknown';
                 const customerArea = order.customer_area || order.customer?.area || '';
+                const specialInstructions = order.customer?.special_instructions?.si_cx_instruction?.trim() || undefined;
 
                 // Use placed_time for when order was actually placed
                 const orderDate = order.status?.placed_time || order.status?.ordered_time || order.ordered_time || order.orderDate || new Date().toISOString();
-                const prepTime = order.prep_time_details?.predicted_prep_time || 0;
+                const prepTime = order.prep_time_details?.predicted_prep_time || order.prep_time_predicted || 0;
 
                 // Restaurant Mapping — from env config, fallback to hardcoded
                 const RESTAURANT_MAP = config.restaurantMap;
@@ -244,11 +255,14 @@ async function main(): Promise<void> {
                     restaurantName: restaurantNameFromMap || order.restaurantName || order.restaurant_name,
                     items,
                     orderValue,
+                    subtotal,
+                    packingCharge,
                     restaurantDiscount,
                     netEarnings,
                     offerDescription,
                     customerName,
                     customerArea,
+                    specialInstructions,
                     platform: 'swiggy' as const,
                     status: currentStatus,
                     orderDate,
@@ -262,9 +276,24 @@ async function main(): Promise<void> {
                 if (notifyStatuses.includes(currentStatus.toLowerCase())) {
                     const orderNumber = getNextOrderNumber();
                     await notifier.notifyNewOrder(orderNotification, orderNumber);
+
+                    // Register prep-time overdue tracker if prepTime is set
+                    if (orderNotification.prepTime && orderNotification.prepTime > 0) {
+                        prepTimerMap.set(orderId, {
+                            dueAt: Date.now() + orderNotification.prepTime * 60 * 1000,
+                            notification: orderNotification,
+                            fired: false,
+                        });
+                    }
                 } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
                     await notifier.notifyCancelledOrder(orderNotification);
+                    prepTimerMap.delete(orderId); // No longer relevant
                 } else {
+                    // Clear prep timer if order reached a terminal/ready state
+                    const terminalStatuses = ['delivered', 'ready', 'picked_up', 'pickedup', 'dispatched'];
+                    if (terminalStatuses.includes(currentStatus.toLowerCase())) {
+                        prepTimerMap.delete(orderId);
+                    }
                     console.log(`   Skipping notification for status: ${currentStatus}`);
                 }
 
@@ -377,6 +406,23 @@ async function main(): Promise<void> {
         swiggy.lastMenuFetchDate = todayStr;
     }
 
+    async function checkPrepTimeOverdue(): Promise<void> {
+        const now = Date.now();
+        for (const [orderId, entry] of prepTimerMap) {
+            if (!entry.fired && now >= entry.dueAt) {
+                entry.fired = true;
+                console.log(`\n   Prep time overdue for order ${orderId}`);
+                await notifier.notifyPrepTimeOverdue(entry.notification);
+            }
+        }
+        // Prune fired entries older than 30 minutes to avoid unbounded growth
+        for (const [orderId, entry] of prepTimerMap) {
+            if (entry.fired && now - entry.dueAt > 30 * 60 * 1000) {
+                prepTimerMap.delete(orderId);
+            }
+        }
+    }
+
     async function runPollCycle(): Promise<void> {
         if (pollInProgress) {
             return; // Skip if previous cycle is still running
@@ -386,6 +432,11 @@ async function main(): Promise<void> {
             await poll();
         } catch (error) {
             console.error('Unexpected error in poll():', error);
+        }
+        try {
+            await checkPrepTimeOverdue();
+        } catch (error) {
+            console.error('Error in checkPrepTimeOverdue():', error);
         }
         try {
             await checkDailySummary();
@@ -440,7 +491,7 @@ async function main(): Promise<void> {
 /**
  * Extract items from order (handle various Swiggy response formats)
  */
-function extractItems(order: any): { name: string; quantity: number; price: number }[] {
+function extractItems(order: any): { name: string; quantity: number; price: number; finalPrice: number; variant?: string; addons?: string[] }[] {
     // Try common field names
     const items = order.items || order.order_items || order.cart?.items || [];
 
@@ -448,28 +499,52 @@ function extractItems(order: any): { name: string; quantity: number; price: numb
         const name = item.name || item.item_name || item.dish_name || 'Unknown';
         const quantity = item.quantity || item.qty || 1;
 
-        // Price Calculation Logic
-        // IF we have explicit price, use it.
-        // IF NOT, and we have 'total' (which often means line total in this API), derive unit price.
-        // item.total = 60, quantity = 3 => unit price = 20.
-
+        // MRP unit price (sub_total is line MRP)
         let price = item.price || 0;
-
-        if (!price && item.total) {
+        if (!price && item.sub_total) {
+            price = item.sub_total / quantity;
+        } else if (!price && item.total) {
             price = item.total / quantity;
         } else if (!price && item.item_total) {
             price = item.item_total / quantity;
-        } else if (!price && item.final_sub_total) {
-            // final_sub_total is usually after discount logic on the item,
-            // but if it's the only thing we have, we might have to use it.
-            // Preference is 'total' or 'sub_total' for gross price.
-            price = item.final_sub_total / quantity;
+        }
+
+        // Final unit price after per-item discount
+        let finalPrice = 0;
+        if (item.final_sub_total) {
+            finalPrice = item.final_sub_total / quantity;
+        } else {
+            finalPrice = price;
+        }
+
+        // Variant: prefer newVariants, fall back to addons, then variants string
+        let variant: string | undefined;
+        if (item.newVariants && item.newVariants.length > 0) {
+            variant = item.newVariants.map((v: any) => v.name).filter(Boolean).join(', ') || undefined;
+        } else if (typeof item.variants === 'string' && item.variants.trim()) {
+            variant = item.variants.trim();
+        }
+
+        // Addons (named add-ons, price > 0 or explicitly listed)
+        const addons: string[] = [];
+        if (item.newAddons && item.newAddons.length > 0) {
+            for (const a of item.newAddons) {
+                if (a.name) addons.push(a.name);
+            }
+        } else if (item.addons && item.addons.length > 0) {
+            for (const a of item.addons) {
+                // Only include addons that are not already captured as variant
+                if (a.name && a.name !== variant) addons.push(a.name);
+            }
         }
 
         return {
             name,
             quantity,
-            price: Number(price.toFixed(2)), // Ensure 2 decimal places
+            price: Number(price.toFixed(2)),
+            finalPrice: Number(finalPrice.toFixed(2)),
+            variant,
+            addons: addons.length > 0 ? addons : undefined,
         };
     });
 }

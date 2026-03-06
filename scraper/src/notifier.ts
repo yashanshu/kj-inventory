@@ -10,17 +10,29 @@ import fs from 'fs-extra';
 import { config } from './config.js';
 import { WhatsAppService } from './whatsapp.js';
 
+interface OrderItem {
+    name: string;
+    quantity: number;
+    price: number;       // MRP (sub_total / qty)
+    finalPrice: number;  // After per-item discount (final_sub_total / qty)
+    variant?: string;    // e.g. "Quarter (2pcs)"
+    addons?: string[];   // e.g. ["Extra Sauce"]
+}
+
 interface OrderNotification {
     orderId: string;
     restaurantId: number;
     restaurantName?: string;
-    items: { name: string; quantity: number; price: number }[];
-    orderValue: number; // Bill (item totals + packing + GST)
-    restaurantDiscount: number; // Discount restaurant is giving
-    netEarnings: number; // orderValue - restaurantDiscount
+    items: OrderItem[];
+    orderValue: number;        // Bill (item totals + packing)
+    subtotal: number;          // Sum of item sub_totals (MRP, before discount)
+    packingCharge: number;     // Packing/packaging fee
+    restaurantDiscount: number; // Discount restaurant is absorbing
+    netEarnings: number;       // orderValue - restaurantDiscount
     offerDescription?: string; // e.g. "60% off + 50% off"
     customerName?: string;
-    customerArea?: string; // Delivery zone
+    customerArea?: string;     // Delivery zone
+    specialInstructions?: string; // Customer note
     platform: 'swiggy' | 'zomato';
     status: string;
     orderDate: string;
@@ -133,9 +145,13 @@ export class NotificationService {
     async notifyCancelledOrder(order: OrderNotification): Promise<void> {
         const title = `Order Cancelled - ${order.orderId}`;
         const body = `${order.customerName || 'Unknown'} - ₹${order.orderValue.toFixed(0)}`;
+        const restaurantLabel = order.restaurantName ? `${order.restaurantName} — ` : '';
+        const platformLabel = order.platform === 'zomato' ? 'Zomato' : 'Swiggy';
+        const siHtml = order.specialInstructions ? `\n<b>Note:</b> ${order.specialInstructions}` : '';
+        const siPlain = order.specialInstructions ? `\nNote: ${order.specialInstructions}` : '';
 
-        const htmlMessage = `<b>Order Cancelled</b>\n\n<b>Order ID:</b> <code>${order.orderId}</code>\n<b>Customer:</b> ${order.customerName || 'Unknown'}\n<b>Amount:</b> ₹${order.orderValue.toFixed(0)}`;
-        const plainMessage = `Order Cancelled\n\nOrder ID: ${order.orderId}\nCustomer: ${order.customerName || 'Unknown'}\nAmount: ₹${order.orderValue.toFixed(0)}`;
+        const htmlMessage = `<b>${restaurantLabel}${platformLabel} Order Cancelled</b>\n\n<b>Order ID:</b> <code>${order.orderId}</code>\n<b>Customer:</b> ${order.customerName || 'Unknown'}\n<b>Amount:</b> ₹${order.orderValue.toFixed(0)}${siHtml}`;
+        const plainMessage = `Order Cancelled\n\nOrder ID: ${order.orderId}\nCustomer: ${order.customerName || 'Unknown'}\nAmount: ₹${order.orderValue.toFixed(0)}${siPlain}`;
 
         const promises: Promise<void>[] = [];
 
@@ -158,6 +174,17 @@ export class NotificationService {
         }
 
         await Promise.allSettled(promises);
+    }
+
+    async notifyPrepTimeOverdue(order: OrderNotification): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'Zomato' : 'Swiggy';
+        const restaurantLabel = order.restaurantName ? `${order.restaurantName} — ` : '';
+        const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+
+        const htmlMessage = `⚠️ <b>${restaurantLabel}Prep Time Overdue</b>\n\n<b>Order ID:</b> <code>${order.orderId}</code>\n<b>Platform:</b> ${platformLabel}\n<b>Customer:</b> ${order.customerName || 'Unknown'}\n<b>Items:</b> ${itemSummary || '—'}\n<b>Prep Time:</b> ${order.prepTime} mins (exceeded)`;
+        const plainMessage = `PREP TIME OVERDUE\n\nOrder ID: ${order.orderId} (${platformLabel})\nCustomer: ${order.customerName || 'Unknown'}\nItems: ${itemSummary || '—'}\nPrep Time: ${order.prepTime} mins (exceeded)`;
+
+        await this.sendAlertToAll(htmlMessage, plainMessage, 'Prep Time Overdue', `Order ${order.orderId} not ready after ${order.prepTime} mins`);
     }
 
     async notifySessionExpired(): Promise<void> {
@@ -336,7 +363,12 @@ ${dateStr}
 
     private formatISTDateTime(isoString: string): string {
         try {
-            const date = new Date(isoString);
+            // Swiggy's placed_time is already in IST but has no timezone suffix.
+            // Appending '+05:30' prevents double-conversion (UTC→IST adds another 5h30m).
+            const normalized = /[Z+\-]\d{2}:?\d{2}$/.test(isoString)
+                ? isoString
+                : isoString + '+05:30';
+            const date = new Date(normalized);
             return date.toLocaleString('en-IN', {
                 timeZone: 'Asia/Kolkata',
                 day: '2-digit',
@@ -351,66 +383,71 @@ ${dateStr}
     }
 
     private formatOrderMessage(order: OrderNotification, orderNumber: number): string {
-        const itemsList = order.items
-            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price.toFixed(0)})`)
-            .join('\n');
+        const platformLabel = order.platform === 'zomato' ? 'Zomato' : 'Swiggy';
+        const restaurantLabel = order.restaurantName ? `${order.restaurantName} — ` : '';
+
+        const itemsList = order.items.map(item => {
+            const parts: string[] = [];
+            if (item.variant) parts.push(item.variant);
+            if (item.addons && item.addons.length > 0) parts.push(...item.addons);
+            const suffix = parts.length > 0 ? ` <i>(${parts.join(', ')})</i>` : '';
+            return `  • ${item.quantity}x ${item.name}${suffix} — ₹${item.price.toFixed(0)}`;
+        }).join('\n');
 
         const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
+        const areaRow = order.customerArea ? `<b>Area:</b> ${order.customerArea}\n` : '';
+        const siRow = order.specialInstructions ? `<b>Note:</b> ${order.specialInstructions}\n` : '';
+        const orderTime = this.formatISTDateTime(order.orderDate);
 
+        // Bill breakdown (no tax lines)
+        const packingRow = order.packingCharge > 0 ? `<b>Packing:</b> ₹${order.packingCharge.toFixed(0)}\n` : '';
         let discountRow = '';
         if (order.restaurantDiscount > 0) {
             const offerText = order.offerDescription ? ` (${order.offerDescription})` : '';
-            discountRow = `<b>Restaurant Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
+            discountRow = `<b>Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
         }
 
-        const areaRow = order.customerArea ? `<b>Area:</b> ${order.customerArea}\n` : '';
-        const orderTime = this.formatISTDateTime(order.orderDate);
-
         return `
-<b>New Swiggy Order #${orderNumber}</b>
+<b>${restaurantLabel}New ${platformLabel} Order #${orderNumber}</b>
 
 <b>Order ID:</b> <code>${order.orderId}</code>
 <b>Customer:</b> ${order.customerName || 'Unknown'}
-${areaRow}<b>Time:</b> ${orderTime}
+${areaRow}${siRow}<b>Time:</b> ${orderTime}
 <b>Prep Time:</b> ${prepTime}
 
 <b>Items:</b>
 ${itemsList || '  (items not available)'}
 
-<b>Order Value:</b> ₹${order.orderValue.toFixed(0)}
+<b>Subtotal:</b> ₹${order.subtotal.toFixed(0)}
+${packingRow}<b>Order Value:</b> ₹${order.orderValue.toFixed(0)}
 ${discountRow}<b>Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
 `.trim();
     }
 
     private formatWhatsAppMessage(order: OrderNotification, orderNumber: number): string {
-        const itemsList = order.items
-            .map(item => `  • ${item.quantity}x ${item.name} (₹${item.price.toFixed(0)})`)
-            .join('\n');
-
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
         const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
-
-        let discountRow = '';
-        if (order.restaurantDiscount > 0) {
-            const offerText = order.offerDescription ? ` (${order.offerDescription})` : '';
-            discountRow = `Restaurant Discount: -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
-        }
-
-        const areaRow = order.customerArea ? `Area: ${order.customerArea}\n` : '';
         const orderTime = this.formatISTDateTime(order.orderDate);
 
+        const itemsList = order.items.map(item => {
+            const parts: string[] = [];
+            if (item.variant) parts.push(item.variant);
+            if (item.addons && item.addons.length > 0) parts.push(...item.addons);
+            const suffix = parts.length > 0 ? `\n    _${parts.join(' + ')}_` : '';
+            return `*${item.quantity}x*  ${item.name}${suffix}`;
+        }).join('\n');
+
+        const siRow = order.specialInstructions ? `\n*Note:* _${order.specialInstructions}_\n` : '';
+        const areaRow = order.customerArea ? `*Area:* ${order.customerArea}` : '';
+
         return `
-*New Swiggy Order #${orderNumber}*
+*KOT — ORDER #${orderNumber} — ${platformLabel}*
+*Prep: ${prepTime}*  |  ${orderTime}
 
-*Order ID:* ${order.orderId}
-*Customer:* ${order.customerName || 'Unknown'}
-${areaRow}*Time:* ${orderTime}
-*Prep Time:* ${prepTime}
-
-*Items:*
-${itemsList || '  (items not available)'}
-
-*Order Value:* ₹${order.orderValue.toFixed(0)}
-${discountRow}*Net Earnings:* ₹${order.netEarnings.toFixed(0)}
+————————————————
+${itemsList || '(items not available)'}
+————————————————
+${areaRow}${siRow}
 `.trim();
     }
 

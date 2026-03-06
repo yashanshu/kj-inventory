@@ -19,15 +19,18 @@ async function testNotifs() {
         restaurantId: 101,
         restaurantName: 'Test Restaurant',
         items: [
-            { name: 'Butter Chicken', quantity: 1, price: 350 },
-            { name: 'Naan', quantity: 2, price: 60 }
+            { name: 'Butter Chicken', quantity: 1, price: 350, finalPrice: 280, variant: 'Quarter (2 pcs)' },
+            { name: 'Naan', quantity: 2, price: 60, finalPrice: 60, variant: 'Plain' }
         ],
         orderValue: 470,
+        subtotal: 470,
+        packingCharge: 10,
         restaurantDiscount: 94,
         netEarnings: 376,
         offerDescription: '20% off',
         customerName: 'Test User',
         customerArea: 'Sector 54, Gurgaon',
+        specialInstructions: 'Less spicy please',
         platform: 'swiggy' as const,
         status: 'ordered',
         orderDate: new Date().toISOString(),
