@@ -4,9 +4,6 @@ services:
     image: ${DOCKER_IMAGE:-asia-south2-docker.pkg.dev/modified-ripsaw-444917-d3/kj-inventory/app:latest}
     restart: unless-stopped
 
-    ports:
-      - "${APP_HOST_PORT:-8080}:8080"
-
     environment:
       # Server Configuration
       - SERVER_PORT=${SERVER_PORT:-8080}
@@ -119,6 +116,23 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - kj-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
 
 networks:
   kj-network:
