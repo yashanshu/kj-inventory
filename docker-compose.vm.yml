@@ -102,7 +102,7 @@ services:
       - MENU_RESTAURANT_LNG=${MENU_RESTAURANT_LNG:-0}
 
     volumes:
-      - ./scraper/data:/app/data
+      - scraper-data:/app/data
 
     depends_on:
       app:
@@ -126,5 +126,7 @@ networks:
 
 volumes:
   app-data:
+    driver: local
+  scraper-data:
     driver: local
 

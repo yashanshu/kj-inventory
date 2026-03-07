@@ -214,8 +214,8 @@ Production files will be in `frontend/dist/`
 # Deploy to GCE instance
 ./deploy-gce-combined.sh --project YOUR_PROJECT_ID --deploy
 
-# Or run locally with docker-compose
-docker compose -f docker-compose.gce.yml up -d
+# Or run the VM deployment stack locally
+docker compose -f docker-compose.vm.yml up -d
 ```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment guide.

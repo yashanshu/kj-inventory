@@ -7,10 +7,11 @@
 # Estimated cost: ~$14-27/month depending on instance size
 #
 # Usage:
-#   ./deploy-gce-combined.sh --project PROJECT_ID --create   # Create new VM
-#   ./deploy-gce-combined.sh --project PROJECT_ID --deploy   # Deploy/update
-#   ./deploy-gce-combined.sh --project PROJECT_ID --ssh      # SSH into VM
-#   ./deploy-gce-combined.sh --project PROJECT_ID --logs     # View logs
+#   ./deploy-gce-combined.sh --project PROJECT_ID --create     # Create new VM
+#   ./deploy-gce-combined.sh --project PROJECT_ID --bootstrap  # Install Docker/Compose on VM
+#   ./deploy-gce-combined.sh --project PROJECT_ID --deploy     # Deploy/update
+#   ./deploy-gce-combined.sh --project PROJECT_ID --ssh        # SSH into VM
+#   ./deploy-gce-combined.sh --project PROJECT_ID --logs       # View logs
 #
 # Requirements:
 #   - gcloud CLI installed and authenticated
@@ -45,10 +46,11 @@ PROJECT_ID=""
 ACTION=""
 
 usage() {
-    echo "Usage: $0 --project PROJECT_ID [--create|--deploy|--ssh|--logs]"
+    echo "Usage: $0 --project PROJECT_ID [--create|--bootstrap|--deploy|--ssh|--logs]"
     echo ""
     echo "Actions:"
     echo "  --create   Create new GCE instance"
+    echo "  --bootstrap Install Docker/Compose and prepare the VM"
     echo "  --deploy   Deploy/update application"
     echo "  --ssh      SSH into the VM"
     echo "  --logs     View application logs"
@@ -71,6 +73,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --deploy)
             ACTION="deploy"
+            shift
+            ;;
+        --bootstrap)
+            ACTION="bootstrap"
             shift
             ;;
         --ssh)
@@ -151,7 +157,7 @@ apt-get update && apt-get install -y docker-compose-plugin
 gcloud auth configure-docker asia-south2-docker.pkg.dev --quiet
 
 # Create app directory structure
-mkdir -p /opt/kj-inventory/{data,logs,scraper/data}
+mkdir -p /opt/kj-inventory/{logs,scraper/bootstrap}
 chmod -R 755 /opt/kj-inventory
 
 echo "Startup script completed" > /opt/kj-inventory/startup.log
@@ -214,135 +220,56 @@ STARTUP_EOF
 ###############################################################################
 # Deploy Application
 ###############################################################################
-deploy_app() {
-    log_info "============================================"
-    log_info "Deploying KJ Inventory to ${INSTANCE_NAME}"
-    log_info "============================================"
-
-    # Check if instance exists
+check_instance_exists() {
     if ! gcloud compute instances describe "${INSTANCE_NAME}" \
         --zone="${ZONE}" --project="${PROJECT_ID}" &>/dev/null; then
         log_error "Instance ${INSTANCE_NAME} does not exist. Run with --create first."
         exit 1
     fi
+}
 
-    # Check for required env file
-    if [ ! -f "${SCRIPT_DIR}/.env.production" ]; then
-        log_error ".env.production not found"
-        log_error "Create it from .env.example and configure your settings"
+delegate_vm_action() {
+    local vm_script="${SCRIPT_DIR}/deploy-vm.sh"
+    if [ ! -f "${vm_script}" ]; then
+        log_error "deploy-vm.sh not found at ${vm_script}"
         exit 1
     fi
 
-    # Create deployment package
-    log_info "Creating deployment package..."
-    DEPLOY_DIR=$(mktemp -d)
-    trap "rm -rf ${DEPLOY_DIR}" EXIT
-
-    # Copy docker-compose
-    cp "${SCRIPT_DIR}/docker-compose.gce.yml" "${DEPLOY_DIR}/docker-compose.yml"
-    
-    # Copy environment file
-    cp "${SCRIPT_DIR}/.env.production" "${DEPLOY_DIR}/.env"
-
-    # Copy scraper directory
-    # Note: Scraper source is no longer needed as we pull the image
-    # We only need data directories for session persistence if applicable
-
-    # Copy scraper session data if exists
-    # Copy scraper session data
-    # Copy scraper session data
-    mkdir -p "${DEPLOY_DIR}/scraper/data"
-    if [ -f "${SCRIPT_DIR}/scraper/data/session.json" ]; then
-        cp "${SCRIPT_DIR}/scraper/data/session.json" "${DEPLOY_DIR}/scraper/data/"
-        log_success "Found session.json, including in deployment"
-    else
-        log_warning "No session.json found. You'll need to run login command if not already authenticated."
-    fi
-
-    # Create systemd service
-    cat > "${DEPLOY_DIR}/kj-inventory.service" << 'EOF'
-[Unit]
-Description=KJ Inventory Application
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/kj-inventory
-ExecStartPre=/usr/bin/docker compose pull
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-TimeoutStartSec=600
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # Create tarball
-    log_info "Packaging files..."
-    TARBALL="${DEPLOY_DIR}/deploy.tar.gz"
-    tar -czf "${TARBALL}" -C "${DEPLOY_DIR}" \
-        docker-compose.yml .env scraper kj-inventory.service
-
-    # Upload to instance
-    log_info "Uploading to instance..."
-    gcloud compute scp "${TARBALL}" "${INSTANCE_NAME}:/tmp/deploy.tar.gz" \
-        --zone="${ZONE}" --project="${PROJECT_ID}" \
-        --tunnel-through-iap
-
-    # Deploy on instance
-    log_info "Installing on instance..."
-    gcloud compute ssh "${INSTANCE_NAME}" \
-        --zone="${ZONE}" --project="${PROJECT_ID}" \
+    bash "${vm_script}" \
+        --transport gcloud \
+        --project "${PROJECT_ID}" \
+        --zone "${ZONE}" \
+        --instance "${INSTANCE_NAME}" \
         --tunnel-through-iap \
-        --command='
-set -e
-cd /opt/kj-inventory
-sudo tar -xzf /tmp/deploy.tar.gz
+        --remote-dir /opt/kj-inventory \
+        --compose-file "${SCRIPT_DIR}/docker-compose.vm.yml" \
+        --env-file "${SCRIPT_DIR}/.env.production" \
+        --compose-project-name kj-inventory \
+        --registry-auth gcloud \
+        --registry-host asia-south2-docker.pkg.dev \
+        "$@"
+}
 
-# Fix permissions for scraper data
-sudo chown -R 1001:1001 scraper/data
+bootstrap_instance() {
+    log_info "Preparing ${INSTANCE_NAME} for deployment..."
+    check_instance_exists
+    delegate_vm_action --bootstrap
+}
 
-# Configure Docker for Artifact Registry (if not already configured)
-sudo gcloud auth configure-docker asia-south2-docker.pkg.dev --quiet 2>/dev/null || true
+deploy_app() {
+    log_info "Deploying KJ Inventory to ${INSTANCE_NAME}"
+    check_instance_exists
+    delegate_vm_action --deploy
 
-sudo cp kj-inventory.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable kj-inventory
-
-# Pull latest images
-echo "Pulling latest images..."
-sudo docker compose pull
-
-# Run database migrations before starting containers
-echo "Running database migrations..."
-sudo docker compose run --rm \
-    -v kj-inventory_app-data:/app/data \
-    app \
-    /usr/local/bin/migrate \
-    -path /app/migrations/sqlite \
-    -database "sqlite3:///app/data/inventory.db?_fk=1" \
-    up
-
-sudo systemctl restart kj-inventory
-echo "Waiting for services to start..."
-sleep 15
-sudo docker compose ps
-echo ""
-echo "Recent logs:"
-sudo docker compose logs --tail=10
-'
-
-    # Get external IP
-    EXTERNAL_IP=$(gcloud compute instances describe "${INSTANCE_NAME}" \
+    local external_ip
+    external_ip=$(gcloud compute instances describe "${INSTANCE_NAME}" \
         --zone="${ZONE}" --project="${PROJECT_ID}" \
         --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 
     log_success "============================================"
     log_success "Deployment completed successfully"
     log_success "============================================"
-    log_info "Application URL: http://${EXTERNAL_IP}:8080"
+    log_info "Application URL: http://${external_ip}:8080"
     log_info ""
     log_info "Useful commands:"
     log_info "  View logs:  $0 --project ${PROJECT_ID} --logs"
@@ -353,19 +280,16 @@ sudo docker compose logs --tail=10
 # SSH into VM
 ###############################################################################
 ssh_to_vm() {
-    gcloud compute ssh "${INSTANCE_NAME}" \
-        --zone="${ZONE}" --project="${PROJECT_ID}" \
-        --tunnel-through-iap
+    check_instance_exists
+    delegate_vm_action --ssh
 }
 
 ###############################################################################
 # View logs
 ###############################################################################
 view_logs() {
-    gcloud compute ssh "${INSTANCE_NAME}" \
-        --zone="${ZONE}" --project="${PROJECT_ID}" \
-        --tunnel-through-iap \
-        --command='sudo docker compose -f /opt/kj-inventory/docker-compose.yml logs -f --tail=100'
+    check_instance_exists
+    delegate_vm_action --logs
 }
 
 ###############################################################################
@@ -374,6 +298,9 @@ view_logs() {
 case $ACTION in
     create)
         create_instance
+        ;;
+    bootstrap)
+        bootstrap_instance
         ;;
     deploy)
         deploy_app
