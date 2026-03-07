@@ -49,5 +49,5 @@ RUN addgroup -g 1001 scraper && \
 USER scraper
 
 # Copy session from preload to volume if it exists, then start
-CMD ["/bin/sh", "-c", "if [ -f /app/data-preload/session.json ]; then cp /app/data-preload/session.json /app/data/session.json; fi && node dist/index.js"]
+CMD ["/bin/sh", "-c", "find /app/data/wwebjs_auth -name 'SingletonLock' -delete 2>/dev/null || true && if [ -f /app/data-preload/session.json ]; then cp /app/data-preload/session.json /app/data/session.json; fi && node dist/index.js"]
 
