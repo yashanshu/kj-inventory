@@ -38,7 +38,8 @@ export class WhatsAppService {
                     '--disable-software-rasterizer',
                     '--disable-background-timer-throttling',
                     '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding'
+                    '--disable-renderer-backgrounding',
+                    '--disable-singleton-lock'
                 ],
                 timeout: 60000 // 60 seconds timeout
             }

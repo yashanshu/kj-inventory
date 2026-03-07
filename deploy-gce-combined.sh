@@ -317,10 +317,9 @@ sudo docker compose pull
 
 # Run database migrations before starting containers
 echo "Running database migrations..."
-APP_IMAGE=$(sudo docker compose config --images | head -1)
-sudo docker run --rm \
+sudo docker compose run --rm \
     -v kj-inventory_app-data:/app/data \
-    "${APP_IMAGE}" \
+    app \
     /usr/local/bin/migrate \
     -path /app/migrations/sqlite \
     -database "sqlite3:///app/data/inventory.db?_fk=1" \
