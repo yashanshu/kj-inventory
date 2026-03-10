@@ -162,6 +162,8 @@ export class SwiggyClient {
                 { headers: this.getHeaders() }
             );
 
+            //console.log(`fetchOrders HTTP ${response.status} | statusCode: ${response.data.statusCode} | msg: ${response.data.statusMessage || '(none)'}`);
+
             if (response.data.statusCode !== 0) {
                 this.consecutiveApiFailures++;
                 const failCount = this.consecutiveApiFailures;

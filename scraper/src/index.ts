@@ -314,7 +314,7 @@ async function main(): Promise<void> {
 
         } catch (error: any) {
             consecutiveErrors++;
-            console.error(`\nPoll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error.message);
+            console.error(`\nPoll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error?.message || String(error), error?.response ? `| HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}` : '');
 
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                 console.error('\n3 consecutive errors. Sending notification and stopping.');
