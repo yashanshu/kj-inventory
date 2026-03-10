@@ -92,7 +92,12 @@ export class SwiggyClient {
 
             // Load last updated times if they exist
             if (await fs.pathExists(STATE_FILE)) {
-                const state = await fs.readJson(STATE_FILE);
+                let state: any = {};
+                try {
+                    state = await fs.readJson(STATE_FILE);
+                } catch (e) {
+                    console.warn('Warning: state.json is corrupt, starting with empty state');
+                }
                 const entries = Object.entries(state.lastUpdatedTimes || {});
                 this.lastUpdatedTimes = new Map(
                     entries.map(([key, value]) => [Number(key), value as string])

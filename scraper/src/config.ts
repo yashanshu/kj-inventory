@@ -45,6 +45,7 @@ export const config = {
 
     // General
     pollInterval: parseInt(process.env.POLL_INTERVAL_MS || '30000', 10),
+    maxConsecutiveErrors: parseInt(process.env.MAX_CONSECUTIVE_ERRORS || '10', 10),
     shifts: parseShifts(),
     restaurantMap: parseRestaurantMap(),
 

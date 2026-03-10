@@ -144,7 +144,7 @@ async function main(): Promise<void> {
 
     // Main polling loop
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 3;
+    const MAX_CONSECUTIVE_ERRORS = config.maxConsecutiveErrors;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let pollInProgress = false;
 
