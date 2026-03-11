@@ -87,21 +87,23 @@ export function MenuPage() {
         <div>
           <h1 className="text-page-title">Restaurant Menu</h1>
           {selectedMenu && (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)', marginTop: 4 }}>
-              Updated{' '}
-              {new Date(selectedMenu.fetchedAt).toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
-                hour: '2-digit', minute: '2-digit', hour12: true,
-              })}
-            </p>
-            <span style={{
-              fontSize: '0.6875rem', fontWeight: 600,
-              padding: '0.125rem 0.375rem', borderRadius: 99,
-              background: selectedMenu?.storeId ? 'rgb(34 197 94 / 0.1)' : 'rgb(234 179 8 / 0.1)',
-              color: selectedMenu?.storeId ? '#15803d' : '#a16207',
-            }}>
-              {selectedMenu?.storeId ? 'Bound' : 'Unbound'}
-            </span>
+            <>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)', marginTop: 4 }}>
+                Updated{' '}
+                {new Date(selectedMenu.fetchedAt).toLocaleString('en-IN', {
+                  timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
+                  hour: '2-digit', minute: '2-digit', hour12: true,
+                })}
+              </p>
+              <span style={{
+                fontSize: '0.6875rem', fontWeight: 600,
+                padding: '0.125rem 0.375rem', borderRadius: 99,
+                background: selectedMenu?.storeId ? 'rgb(34 197 94 / 0.1)' : 'rgb(234 179 8 / 0.1)',
+                color: selectedMenu?.storeId ? '#15803d' : '#a16207',
+              }}>
+                {selectedMenu?.storeId ? 'Bound' : 'Unbound'}
+              </span>
+            </>
           )}
         </div>
         {menus.length > 1 && (
