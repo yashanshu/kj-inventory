@@ -314,11 +314,14 @@ async function main(): Promise<void> {
 
         } catch (error: any) {
             consecutiveErrors++;
-            console.error(`\nPoll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error?.message || String(error), error?.response ? `| HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}` : '');
+            const errMsg = error?.message || String(error);
+            const httpInfo = error?.response ? `| HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}` : '';
+            const causeInfo = error?.errors?.length ? `| causes: ${error.errors.map((e: any) => e?.message || String(e)).join('; ')}` : '';
+            console.error(`\nPoll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${errMsg} ${httpInfo}${causeInfo}`);
 
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                 console.error('\n3 consecutive errors. Sending notification and stopping.');
-                await notifier.notifyError(error.message);
+                await notifier.notifyError(errMsg + causeInfo);
                 if (pollTimer) clearInterval(pollTimer);
                 await deduplicator.save();
                 process.exit(1);
