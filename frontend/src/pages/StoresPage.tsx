@@ -7,8 +7,6 @@ import { toast } from 'sonner';
 
 export function StoresPage() {
   const { user } = useAuthStore();
-  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
-
   const { data: stores = [], isLoading } = useStores();
   const createStore = useCreateStore();
   const updateStore = useUpdateStore();
@@ -17,6 +15,8 @@ export function StoresPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', code: '', isPrimary: false });
+
+  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
 
   const handleCreate = async () => {
     if (!form.name.trim() || !form.code.trim()) {

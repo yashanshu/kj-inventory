@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ isLoading: true });
       const user = await authService.getProfile();
       set({ user, isAuthenticated: true, isLoading: false, error: null });
-    } catch (error) {
+    } catch {
       authService.logout();
       set({ user: null, isAuthenticated: false, isLoading: false, error: null });
     }

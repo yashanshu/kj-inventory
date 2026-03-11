@@ -13,20 +13,20 @@ const PLATFORM_CONFIG: Record<string, { bg: string; text: string }> = {
 
 export function PlatformBindingsPage() {
   const { user } = useAuthStore();
-  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
-
   const { data: bindings = [], isLoading } = useBindings();
   const { data: stores = [] } = useStores();
   const createBinding = useCreateBinding();
   const updateBinding = useUpdateBinding();
   const deleteBinding = useDeleteBinding();
 
-  const storeMap = Object.fromEntries(stores.map(s => [s.id, s.name]));
-
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ storeId: '', platform: 'swiggy', restaurantId: '', restaurantName: '' });
   const [editForm, setEditForm] = useState({ restaurantName: '', isActive: true });
+
+  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
+
+  const storeMap = Object.fromEntries(stores.map(s => [s.id, s.name]));
 
   const handleCreate = async () => {
     if (!form.storeId || !form.restaurantId) {
