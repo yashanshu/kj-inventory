@@ -26,9 +26,23 @@ func setupOrderTestDB(t *testing.T) *sql.DB {
 
 	// Create schema
 	schema := `
+	CREATE TABLE IF NOT EXISTS platform_store_bindings (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL,
+		store_id TEXT NOT NULL,
+		platform TEXT NOT NULL,
+		restaurant_id TEXT NOT NULL,
+		restaurant_name TEXT
+	);
+
 	CREATE TABLE IF NOT EXISTS external_orders (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		organization_id TEXT,
+		store_id TEXT,
+		platform_binding_id TEXT,
 		platform TEXT NOT NULL,
+		restaurant_id TEXT NOT NULL DEFAULT '',
+		restaurant_name TEXT,
 		external_order_id TEXT NOT NULL,
 		order_date DATETIME NOT NULL,
 		customer_name TEXT,
@@ -37,7 +51,8 @@ func setupOrderTestDB(t *testing.T) *sql.DB {
 		items_json TEXT,
 		raw_data TEXT,
 		notified_at DATETIME,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_external_orders_platform_id ON external_orders(platform, external_order_id);
 	`

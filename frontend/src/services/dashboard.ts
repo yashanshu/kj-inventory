@@ -11,8 +11,8 @@ import type {
 } from '../types/inventory';
 
 export const dashboardService = {
-  async getMetrics(): Promise<DashboardMetrics> {
-    return apiClient.get<DashboardMetrics>('/dashboard/metrics');
+  async getMetrics(storeId?: string): Promise<DashboardMetrics> {
+    return apiClient.get<DashboardMetrics>('/dashboard/metrics', storeId ? { store_id: storeId } : undefined);
   },
 
   async getRecentMovements(limit?: number): Promise<StockMovement[]> {

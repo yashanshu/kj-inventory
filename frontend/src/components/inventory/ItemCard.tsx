@@ -1,6 +1,6 @@
 import type { Item, Category } from '../../types/inventory';
 import { useStockStatus } from '../../hooks/useStockStatus';
-import { Edit2, Package } from 'lucide-react';
+import { Edit2, ArrowUpDown } from 'lucide-react';
 
 interface ItemCardProps {
   item: Item;
@@ -11,83 +11,88 @@ interface ItemCardProps {
   canEdit?: boolean;
 }
 
-export function ItemCard({
-  item,
-  category,
-  onAdjust,
-  onEdit,
-  showUnitCost = true,
-  canEdit = true,
-}: ItemCardProps) {
+export function ItemCard({ item, category, onAdjust, onEdit, showUnitCost = true, canEdit = true }: ItemCardProps) {
   const status = useStockStatus(item);
-  const gridCols = showUnitCost ? 'grid-cols-3' : 'grid-cols-2';
+  const isOut = item.currentStock === 0;
+  const pct = item.minimumThreshold > 0
+    ? Math.min(100, (item.currentStock / item.minimumThreshold) * 100)
+    : 100;
+
+  const badgeClass = isOut ? 'badge-danger' : status.label === 'Low Stock' ? 'badge-warning' : 'badge-success';
 
   return (
-    <div className="p-4 hover:bg-gray-50 transition-colors">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900 truncate">{item.name}</h3>
-          {category ? (
-            <div className="flex items-center space-x-2 mt-1">
-              {category.color && (
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: category.color }}
-                />
-              )}
-              <p className="text-xs text-gray-600">{category.name}</p>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 mt-1">No category</p>
-          )}
-          {item.sku && <p className="text-xs text-gray-500">SKU: {item.sku}</p>}
+    <div style={{
+      padding: '1rem 1.125rem',
+      borderBottom: '1px solid var(--neutral-100)',
+      transition: 'background 0.1s',
+    }}
+    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--neutral-50)'}
+    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ''}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem', gap: '0.5rem' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--neutral-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.name}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginTop: 3 }}>
+            {category?.color && (
+              <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: category.color }} />
+            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--neutral-500)' }}>
+              {category?.name || 'Uncategorized'}
+            </span>
+            {item.sku && (
+              <>
+                <span style={{ color: 'var(--neutral-300)' }}>·</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--neutral-400)' }}>{item.sku}</span>
+              </>
+            )}
+          </div>
         </div>
-        <span
-          className={`px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ml-2 ${status.color}`}
-        >
-          {status.label}
-        </span>
+        <span className={`badge ${badgeClass}`}>{status.label}</span>
       </div>
 
-      <div className={`grid ${gridCols} gap-3 mb-3 text-sm`}>
-        <div>
-          <p className="text-xs text-gray-500">Stock</p>
-          <p className="font-semibold text-gray-900">
-            {item.currentStock} {item.unit}
-          </p>
+      {/* Stock bar */}
+      <div style={{ marginBottom: '0.875rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--neutral-500)' }}>Stock level</span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--neutral-800)' }}>
+            {item.currentStock} / {item.minimumThreshold} {item.unit}
+          </span>
         </div>
-        <div>
-          <p className="text-xs text-gray-500">Min</p>
-          <p className="font-medium text-gray-700">
-            {item.minimumThreshold} {item.unit}
-          </p>
+        <div style={{ height: 5, borderRadius: 99, background: 'var(--neutral-100)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: 99,
+            width: `${pct}%`,
+            background: isOut ? '#ef4444' : pct < 50 ? '#f59e0b' : '#10b981',
+            transition: 'width 0.3s ease',
+          }} />
         </div>
-        {showUnitCost && (
-          <div>
-            <p className="text-xs text-gray-500">Cost</p>
-            <p className="font-medium text-gray-700">
-              {item.unitCost != null ? `$${item.unitCost.toFixed(2)}` : '-'}
-            </p>
+        {showUnitCost && item.unitCost != null && (
+          <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--neutral-500)' }}>
+            ₹{item.unitCost.toFixed(2)} / {item.unit}
           </div>
         )}
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
         {canEdit && (
           <button
             onClick={() => onEdit(item)}
-            className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 text-sm border border-indigo-200 text-indigo-700 rounded-lg font-medium hover:bg-indigo-50 transition-colors"
+            className="btn btn-secondary btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
           >
-            <Edit2 className="w-4 h-4" />
-            <span>Edit</span>
+            <Edit2 style={{ width: 13, height: 13 }} />
+            Edit
           </button>
         )}
         <button
           onClick={() => onAdjust(item)}
-          className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 transition-all"
+          className="btn btn-primary btn-sm"
+          style={{ flex: 1, justifyContent: 'center' }}
         >
-          <Package className="w-4 h-4" />
-          <span>Adjust</span>
+          <ArrowUpDown style={{ width: 13, height: 13 }} />
+          Adjust
         </button>
       </div>
     </div>

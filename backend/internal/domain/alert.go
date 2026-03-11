@@ -24,6 +24,7 @@ const (
 type Alert struct {
 	ID             uuid.UUID     `json:"id" db:"id"`
 	OrganizationID uuid.UUID     `json:"organizationId" db:"organization_id"`
+	StoreID        *uuid.UUID    `json:"storeId,omitempty" db:"store_id"`
 	ItemID         *uuid.UUID    `json:"itemId,omitempty" db:"item_id"`
 	Type           AlertType     `json:"type" db:"type"`
 	Severity       AlertSeverity `json:"severity" db:"severity"`

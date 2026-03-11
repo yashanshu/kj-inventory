@@ -1,4 +1,4 @@
-import { PackageOpen, Plus } from 'lucide-react';
+import { PackageOpen, Plus, Filter } from 'lucide-react';
 
 interface EmptyStateProps {
   hasFilters: boolean;
@@ -7,25 +7,31 @@ interface EmptyStateProps {
 
 export function EmptyState({ hasFilters, onAddItem }: EmptyStateProps) {
   return (
-    <div className="text-center py-16 bg-white rounded-lg shadow">
-      <div className="text-gray-400 mb-4">
-        <PackageOpen className="w-16 h-16 mx-auto" />
-      </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        {hasFilters ? 'No items found' : 'No items in inventory'}
-      </h3>
-      <p className="text-gray-500 mb-6">
+    <div className="card" style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', padding: '4rem 2rem', textAlign: 'center',
+    }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%', marginBottom: '1rem',
+        background: 'var(--neutral-100)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
         {hasFilters
-          ? 'Try adjusting your filters or search query'
-          : 'Get started by adding your first item'}
+          ? <Filter style={{ width: 24, height: 24, color: 'var(--neutral-400)' }} />
+          : <PackageOpen style={{ width: 24, height: 24, color: 'var(--neutral-400)' }} />}
+      </div>
+      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--neutral-800)', marginBottom: 6 }}>
+        {hasFilters ? 'No items match your filters' : 'No items yet'}
+      </h3>
+      <p style={{ fontSize: '0.875rem', color: 'var(--neutral-500)', marginBottom: '1.5rem' }}>
+        {hasFilters
+          ? 'Try adjusting your search or filters'
+          : 'Add your first inventory item to get started'}
       </p>
       {!hasFilters && onAddItem && (
-        <button
-          onClick={onAddItem}
-          className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 shadow-md transition-all"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Your First Item</span>
+        <button onClick={onAddItem} className="btn btn-primary">
+          <Plus style={{ width: 15, height: 15 }} />
+          Add First Item
         </button>
       )}
     </div>

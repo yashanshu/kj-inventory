@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, FolderCog } from 'lucide-react';
+import { Plus, Download, FolderCog, SlidersHorizontal, X } from 'lucide-react';
 import { useItems, useCategories } from '../hooks/useInventory';
 import { useInventoryFilters } from '../hooks/useInventoryFilters';
 import { useCategoryMap } from '../hooks/useCategoryMap';
@@ -44,7 +44,6 @@ export function InventoryPage() {
 
   const handleAdjustStock = (item: Item) => {
     setSelectedItem(item);
-    // Detect screen size - use desktop modal for large screens, bottom sheet for mobile
     setUseDesktopModal(window.innerWidth >= 768);
   };
 
@@ -72,16 +71,23 @@ export function InventoryPage() {
     try {
       exportItemsToCSV(filteredItems, categoryMap, generateExportFilename());
       toast.success(`Exported ${filteredItems.length} items to CSV`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to export items');
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Inventory</h1>
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <h1 className="text-page-title">Inventory</h1>
+          {totalItems > 0 && (
+            <p style={{ fontSize: '0.875rem', color: 'var(--neutral-500)', marginTop: 4 }}>
+              {totalItems} item{totalItems !== 1 ? 's' : ''} total
+            </p>
+          )}
+        </div>
 
         {/* Mobile: Dropdown Menu */}
         <div className="md:hidden">
@@ -95,49 +101,70 @@ export function InventoryPage() {
         </div>
 
         {/* Desktop: Individual Buttons */}
-        <div className="hidden md:flex items-center space-x-3">
+        <div className="hidden md:flex" style={{ alignItems: 'center', gap: '0.625rem' }}>
           {allowCategoryManagement && (
-            <button
-              onClick={() => setShowCategoryManager(true)}
-              className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
-            >
-              <FolderCog className="w-5 h-5" />
-              <span>Manage Categories</span>
+            <button onClick={() => setShowCategoryManager(true)} className="btn btn-secondary">
+              <FolderCog style={{ width: 15, height: 15 }} />
+              Categories
             </button>
           )}
           {totalItems > 0 && (
-            <button
-              onClick={handleExport}
-              className="flex items-center space-x-2 px-4 py-2 border border-purple-200 text-purple-700 rounded-lg hover:bg-purple-50 transition-colors"
-            >
-              <Download className="w-5 h-5" />
-              <span>Export CSV</span>
+            <button onClick={handleExport} className="btn btn-secondary">
+              <Download style={{ width: 15, height: 15 }} />
+              Export
             </button>
           )}
           {allowItemEdits && (
-            <button
-              onClick={handleAddItemClick}
-              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Item</span>
+            <button onClick={handleAddItemClick} className="btn btn-primary">
+              <Plus style={{ width: 15, height: 15 }} />
+              Add Item
             </button>
           )}
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow p-3 sm:p-4 space-y-3 sm:space-y-4">
-        <SearchBar
-          value={filters.localSearchTerm}
-          onChange={filters.setLocalSearchTerm}
-        />
+      {/* Filters bar */}
+      <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+        {/* Top row: search + low-stock toggle */}
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <SearchBar value={filters.localSearchTerm} onChange={filters.setLocalSearchTerm} />
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            cursor: 'pointer', userSelect: 'none',
+            padding: '0.5625rem 0.875rem',
+            borderRadius: 'var(--radius-md)',
+            border: `1px solid ${filters.lowStockOnly ? 'var(--brand-200)' : 'var(--neutral-200)'}`,
+            background: filters.lowStockOnly ? 'var(--brand-50)' : 'var(--neutral-0)',
+            fontSize: '0.875rem', fontWeight: 500,
+            color: filters.lowStockOnly ? 'var(--brand-700)' : 'var(--neutral-600)',
+            transition: 'all 0.15s', flexShrink: 0,
+          }}>
+            <SlidersHorizontal style={{ width: 14, height: 14 }} />
+            <input
+              type="checkbox"
+              checked={filters.lowStockOnly}
+              onChange={filters.handleLowStockToggle}
+              style={{ display: 'none' }}
+            />
+            Low stock
+          </label>
+          {hasFilters && (
+            <button
+              onClick={filters.resetFilters}
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--neutral-500)', flexShrink: 0 }}
+            >
+              <X style={{ width: 13, height: 13 }} />
+              Clear
+            </button>
+          )}
+        </div>
 
-        {/* Category Filter */}
+        {/* Category pills */}
         {categoriesLoading ? (
           <CategoryPillsSkeleton />
         ) : (
-          categories && (
+          categories && categories.length > 0 && (
             <CategoryFilter
               categories={categories}
               selectedCategoryId={filters.selectedCategoryId}
@@ -145,31 +172,9 @@ export function InventoryPage() {
             />
           )
         )}
-
-        {/* Additional Filters */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t">
-          <label className="flex items-center space-x-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.lowStockOnly}
-              onChange={filters.handleLowStockToggle}
-              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-            />
-            <span className="text-sm text-gray-700">Low stock only</span>
-          </label>
-
-          {hasFilters && (
-            <button
-              onClick={filters.resetFilters}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium self-start sm:self-auto"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* Items Table */}
+      {/* Items list */}
       {itemsLoading ? (
         <TableSkeleton rows={filters.pageSize} />
       ) : filteredItems.length === 0 ? (
@@ -178,9 +183,9 @@ export function InventoryPage() {
           onAddItem={allowItemEdits ? handleAddItemClick : undefined}
         />
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="card" style={{ overflow: 'hidden' }}>
           {/* Mobile: Card View */}
-          <div className="lg:hidden divide-y divide-gray-200">
+          <div className="lg:hidden">
             {filteredItems.map((item) => (
               <ItemCard
                 key={item.id}
@@ -195,33 +200,19 @@ export function InventoryPage() {
           </div>
 
           {/* Desktop: Table View */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-indigo-50 to-purple-50">
+          <div className="hidden lg:block" style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                    Item
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                    Stock
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                    Status
-                  </th>
-                  {showUnitCost && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                      Unit Cost
-                    </th>
-                  )}
-                  <th className="px-6 py-3 text-right text-xs font-medium text-indigo-900 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th>Item</th>
+                  <th>Category</th>
+                  <th>Stock</th>
+                  <th>Status</th>
+                  {showUnitCost && <th>Unit Cost</th>}
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredItems.map((item) => (
                   <ItemRow
                     key={item.id}
@@ -237,7 +228,6 @@ export function InventoryPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalItems > 0 && (
             <Pagination
               currentPage={filters.page}
@@ -251,33 +241,19 @@ export function InventoryPage() {
       )}
 
       {/* Modals */}
-      {allowItemEdits && showAddModal && (
-        <AddItemModal onClose={() => setShowAddModal(false)} />
-      )}
+      {allowItemEdits && showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} />}
       {allowItemEdits && editingItem && (
-        <EditItemModal
-          item={editingItem}
-          categories={categories}
-          onClose={() => setEditingItem(null)}
-        />
+        <EditItemModal item={editingItem} categories={categories} onClose={() => setEditingItem(null)} />
       )}
       {selectedItem && (
-        <>
-          {useDesktopModal ? (
-            <DesktopStockAdjust
-              item={selectedItem}
-              onClose={() => setSelectedItem(null)}
-            />
-          ) : (
-            <BottomSheetStockAdjust item={selectedItem} open={!!selectedItem} onClose={() => setSelectedItem(null)} />
-          )}
-        </>
+        useDesktopModal ? (
+          <DesktopStockAdjust item={selectedItem} onClose={() => setSelectedItem(null)} />
+        ) : (
+          <BottomSheetStockAdjust item={selectedItem} open={!!selectedItem} onClose={() => setSelectedItem(null)} />
+        )
       )}
       {allowCategoryManagement && showCategoryManager && (
-        <CategoryManagerModal
-          categories={categories}
-          onClose={() => setShowCategoryManager(false)}
-        />
+        <CategoryManagerModal categories={categories} onClose={() => setShowCategoryManager(false)} />
       )}
     </div>
   );

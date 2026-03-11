@@ -31,6 +31,7 @@ func setupMovementTestDB(t *testing.T) *sql.DB {
 	CREATE TABLE IF NOT EXISTS items (
 		id TEXT PRIMARY KEY,
 		organization_id TEXT NOT NULL,
+		store_id TEXT NOT NULL,
 		category_id TEXT NOT NULL,
 		name TEXT NOT NULL,
 		description TEXT,
@@ -73,6 +74,7 @@ func setupMovementTestDB(t *testing.T) *sql.DB {
 	CREATE TABLE IF NOT EXISTS alerts (
 		id TEXT PRIMARY KEY,
 		organization_id TEXT NOT NULL,
+		store_id TEXT,
 		type TEXT NOT NULL,
 		severity TEXT NOT NULL,
 		title TEXT NOT NULL,
@@ -114,6 +116,7 @@ func TestMovementHandler_CreateMovement(t *testing.T) {
 	item := &domain.Item{
 		ID:                uuid.New(),
 		OrganizationID:    orgID,
+		StoreID:           uuid.New(),
 		CategoryID:        categoryID,
 		Name:              "Test Item",
 		UnitOfMeasurement: "pcs",
@@ -186,6 +189,7 @@ func TestMovementHandler_CreateMovement(t *testing.T) {
 			testItem := &domain.Item{
 				ID:                uuid.New(),
 				OrganizationID:    uuid.New(),
+				StoreID:           uuid.New(),
 				CategoryID:        uuid.New(),
 				Name:              "Test Item",
 				UnitOfMeasurement: "pcs",

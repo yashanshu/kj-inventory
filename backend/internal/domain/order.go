@@ -7,7 +7,10 @@ import (
 // ExternalOrder represents an order from Swiggy/Zomato
 type ExternalOrder struct {
 	ID              int64      `db:"id" json:"id"`
+	StoreID         *string    `db:"store_id" json:"storeId,omitempty"`
 	Platform        string     `db:"platform" json:"platform"` // "swiggy" or "zomato"
+	RestaurantID    string     `db:"restaurant_id" json:"restaurantId"`
+	RestaurantName  *string    `db:"restaurant_name" json:"restaurantName,omitempty"`
 	ExternalOrderID string     `db:"external_order_id" json:"externalOrderId"`
 	OrderDate       time.Time  `db:"order_date" json:"orderDate"`
 	CustomerName    *string    `db:"customer_name" json:"customerName,omitempty"`
@@ -29,6 +32,8 @@ type OrderItem struct {
 // CreateOrderRequest is the request body for order ingestion
 type CreateOrderRequest struct {
 	Platform        string  `json:"platform" validate:"required,oneof=swiggy zomato"`
+	RestaurantID    string  `json:"restaurantId"`
+	RestaurantName  *string `json:"restaurantName"`
 	ExternalOrderID string  `json:"externalOrderId" validate:"required"`
 	OrderDate       string  `json:"orderDate" validate:"required"`
 	CustomerName    *string `json:"customerName"`
@@ -41,6 +46,7 @@ type CreateOrderRequest struct {
 // OrderFilters for listing orders
 type OrderFilters struct {
 	Platform  string
+	StoreID   *string
 	StartDate *time.Time
 	EndDate   *time.Time
 	Limit     int

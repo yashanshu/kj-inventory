@@ -1,6 +1,6 @@
 import type { Item, Category } from '../../types/inventory';
 import { useStockStatus } from '../../hooks/useStockStatus';
-import { Edit2, Package } from 'lucide-react';
+import { Edit2, ArrowUpDown } from 'lucide-react';
 
 interface ItemRowProps {
   item: Item;
@@ -11,74 +11,65 @@ interface ItemRowProps {
   canEdit?: boolean;
 }
 
-export function ItemRow({
-  item,
-  category,
-  onAdjust,
-  onEdit,
-  showUnitCost = true,
-  canEdit = true,
-}: ItemRowProps) {
+export function ItemRow({ item, category, onAdjust, onEdit, showUnitCost = true, canEdit = true }: ItemRowProps) {
   const status = useStockStatus(item);
+  const isOut = item.currentStock === 0;
+  const badgeClass = isOut ? 'badge-danger' : status.label === 'Low Stock' ? 'badge-warning' : 'badge-success';
 
   return (
-    <tr className="hover:bg-gray-50 transition-colors">
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm font-medium text-gray-900">{item.name}</div>
-        {item.sku && <div className="text-sm text-gray-500">SKU: {item.sku}</div>}
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        {category ? (
-          <div className="flex items-center space-x-2">
-            {category.color && (
-              <span
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: category.color }}
-              />
-            )}
-            <span className="text-sm text-gray-900">{category.name}</span>
-          </div>
-        ) : (
-          <span className="text-sm text-gray-400">N/A</span>
+    <tr>
+      <td>
+        <div style={{ fontWeight: 500, color: 'var(--neutral-900)', fontSize: '0.875rem' }}>{item.name}</div>
+        {item.sku && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--neutral-400)', marginTop: 2 }}>SKU: {item.sku}</div>
         )}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">
+      <td>
+        {category ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            {category.color && (
+              <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: category.color }} />
+            )}
+            <span style={{ fontSize: '0.875rem', color: 'var(--neutral-700)' }}>{category.name}</span>
+          </div>
+        ) : (
+          <span style={{ fontSize: '0.875rem', color: 'var(--neutral-400)' }}>—</span>
+        )}
+      </td>
+      <td>
+        <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--neutral-800)' }}>
           {item.currentStock} {item.unit}
         </div>
-        <div className="text-xs text-gray-500">
-          Min: {item.minimumThreshold} {item.unit}
+        <div style={{ fontSize: '0.75rem', color: 'var(--neutral-400)', marginTop: 2 }}>
+          min {item.minimumThreshold} {item.unit}
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span
-          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}
-        >
-          {status.label}
-        </span>
+      <td>
+        <span className={`badge ${badgeClass}`}>{status.label}</span>
       </td>
       {showUnitCost && (
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          {item.unitCost != null ? `$${item.unitCost.toFixed(2)}` : '-'}
+        <td style={{ fontSize: '0.875rem', color: 'var(--neutral-700)' }}>
+          {item.unitCost != null ? `₹${item.unitCost.toFixed(2)}` : '—'}
         </td>
       )}
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex items-center justify-end space-x-2">
+      <td style={{ textAlign: 'right' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
           {canEdit && (
             <button
               onClick={() => onEdit(item)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--neutral-500)' }}
             >
-              <Edit2 className="w-4 h-4" />
-              <span>Edit</span>
+              <Edit2 style={{ width: 13, height: 13 }} />
+              Edit
             </button>
           )}
           <button
             onClick={() => onAdjust(item)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium transition-all"
+            className="btn btn-primary btn-sm"
           >
-            <Package className="w-4 h-4" />
-            <span>Adjust Stock</span>
+            <ArrowUpDown style={{ width: 13, height: 13 }} />
+            Adjust
           </button>
         </div>
       </td>

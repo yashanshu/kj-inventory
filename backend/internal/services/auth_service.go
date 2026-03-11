@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +19,7 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrUserInactive       = errors.New("user is inactive")
 	ErrEmailExists        = errors.New("email already exists")
+	ErrUserIDExists       = errors.New("user ID already exists")
 )
 
 type Claims struct {
@@ -39,9 +42,19 @@ func NewAuthService(userRepo repository.UserRepository, jwtSecret string) *AuthS
 	}
 }
 
-// Login authenticates a user and returns a JWT token
-func (s *AuthService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
-	user, err := s.userRepo.GetByEmail(ctx, email)
+// Login authenticates a user and returns a JWT token.
+// The identifier can be a user ID, with full email accepted for compatibility.
+func (s *AuthService) Login(ctx context.Context, identifier, password string) (string, *domain.User, error) {
+	identifier = strings.TrimSpace(identifier)
+	var (
+		user *domain.User
+		err  error
+	)
+	if strings.Contains(identifier, "@") {
+		user, err = s.userRepo.GetByEmail(ctx, identifier)
+	} else {
+		user, err = s.userRepo.GetByUserID(ctx, normalizeUserID(identifier))
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -76,6 +89,26 @@ func (s *AuthService) Register(ctx context.Context, user *domain.User, password 
 	}
 	if existing != nil {
 		return "", ErrEmailExists
+	}
+
+	if user.UserID != "" {
+		user.UserID = normalizeUserID(user.UserID)
+		if user.UserID == "" {
+			return "", ErrUserIDExists
+		}
+		existingByUserID, err := s.userRepo.GetByUserID(ctx, user.UserID)
+		if err != nil {
+			return "", err
+		}
+		if existingByUserID != nil {
+			return "", ErrUserIDExists
+		}
+	} else {
+		generatedUserID, err := s.generateUniqueUserID(ctx, baseUserIDFromEmail(user.Email))
+		if err != nil {
+			return "", err
+		}
+		user.UserID = generatedUserID
 	}
 
 	// Hash password
@@ -188,4 +221,52 @@ func (s *AuthService) generateToken(user *domain.User) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func (s *AuthService) generateUniqueUserID(ctx context.Context, base string) (string, error) {
+	base = normalizeUserID(base)
+	if base == "" {
+		base = "user"
+	}
+
+	candidate := base
+	for suffix := 2; ; suffix++ {
+		existing, err := s.userRepo.GetByUserID(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if existing == nil {
+			return candidate, nil
+		}
+		candidate = fmt.Sprintf("%s%d", base, suffix)
+	}
+}
+
+func baseUserIDFromEmail(email string) string {
+	localPart := strings.TrimSpace(email)
+	if at := strings.Index(localPart, "@"); at >= 0 {
+		localPart = localPart[:at]
+	}
+	return normalizeUserID(localPart)
+}
+
+func normalizeUserID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.', r == '_', r == '-':
+			b.WriteRune(r)
+		}
+	}
+
+	return strings.Trim(b.String(), "._-")
 }

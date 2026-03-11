@@ -77,4 +77,8 @@ export const config = {
     menuFetchHour: parseInt(process.env.MENU_FETCH_HOUR || '18', 10),
     menuRestaurantLat: parseFloat(process.env.MENU_RESTAURANT_LAT || '0'),
     menuRestaurantLng: parseFloat(process.env.MENU_RESTAURANT_LNG || '0'),
+
+    // Promo & risk thresholds
+    promoMarginAlertPct: parseFloat(process.env.PROMO_MARGIN_ALERT_PCT || '48'),
+    riskDistanceKm: parseFloat(process.env.RISK_DISTANCE_KM || '3.0'),
 };

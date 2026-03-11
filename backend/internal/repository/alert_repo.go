@@ -31,6 +31,11 @@ func (r *alertRepoSQLite) Create(ctx context.Context, alert *domain.Alert) (uuid
 	}
 
 	var itemIDStr *string
+	var storeIDStr *string
+	if alert.StoreID != nil {
+		s := alert.StoreID.String()
+		storeIDStr = &s
+	}
 	if alert.ItemID != nil {
 		s := alert.ItemID.String()
 		itemIDStr = &s
@@ -38,12 +43,12 @@ func (r *alertRepoSQLite) Create(ctx context.Context, alert *domain.Alert) (uuid
 
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO alerts (
-			id, organization_id, item_id, type, severity,
+			id, organization_id, store_id, item_id, type, severity,
 			title, message, is_read, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		alert.ID.String(), alert.OrganizationID.String(),
-		itemIDStr, alert.Type, alert.Severity,
+		storeIDStr, itemIDStr, alert.Type, alert.Severity,
 		alert.Title, alert.Message, alert.IsRead, alert.CreatedAt,
 	)
 	if err != nil {
@@ -54,17 +59,18 @@ func (r *alertRepoSQLite) Create(ctx context.Context, alert *domain.Alert) (uuid
 
 func (r *alertRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain.Alert, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, organization_id, item_id, type, severity,
+		SELECT id, organization_id, store_id, item_id, type, severity,
 		       title, message, is_read, created_at
 		FROM alerts WHERE id = ?
 	`, id.String())
 
 	var alert domain.Alert
 	var idStr, orgStr string
+	var storeStr *string
 	var itemStr *string
 
 	if err := row.Scan(
-		&idStr, &orgStr, &itemStr, &alert.Type, &alert.Severity,
+		&idStr, &orgStr, &storeStr, &itemStr, &alert.Type, &alert.Severity,
 		&alert.Title, &alert.Message, &alert.IsRead, &alert.CreatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
@@ -75,6 +81,10 @@ func (r *alertRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain.Al
 
 	alert.ID, _ = uuid.Parse(idStr)
 	alert.OrganizationID, _ = uuid.Parse(orgStr)
+	if storeStr != nil {
+		storeID, _ := uuid.Parse(*storeStr)
+		alert.StoreID = &storeID
+	}
 	if itemStr != nil {
 		itemID, _ := uuid.Parse(*itemStr)
 		alert.ItemID = &itemID
@@ -85,7 +95,7 @@ func (r *alertRepoSQLite) GetByID(ctx context.Context, id uuid.UUID) (*domain.Al
 
 func (r *alertRepoSQLite) ListUnread(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.Alert, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, organization_id, item_id, type, severity,
+		SELECT id, organization_id, store_id, item_id, type, severity,
 		       title, message, is_read, created_at
 		FROM alerts
 		WHERE organization_id = ? AND is_read = false
@@ -102,7 +112,7 @@ func (r *alertRepoSQLite) ListUnread(ctx context.Context, orgID uuid.UUID, limit
 
 func (r *alertRepoSQLite) List(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Alert, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, organization_id, item_id, type, severity,
+		SELECT id, organization_id, store_id, item_id, type, severity,
 		       title, message, is_read, created_at
 		FROM alerts
 		WHERE organization_id = ?
@@ -137,10 +147,11 @@ func (r *alertRepoSQLite) scanAlerts(rows *sql.Rows) ([]*domain.Alert, error) {
 	for rows.Next() {
 		var alert domain.Alert
 		var idStr, orgStr string
+		var storeStr *string
 		var itemStr *string
 
 		if err := rows.Scan(
-			&idStr, &orgStr, &itemStr, &alert.Type, &alert.Severity,
+			&idStr, &orgStr, &storeStr, &itemStr, &alert.Type, &alert.Severity,
 			&alert.Title, &alert.Message, &alert.IsRead, &alert.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -148,6 +159,10 @@ func (r *alertRepoSQLite) scanAlerts(rows *sql.Rows) ([]*domain.Alert, error) {
 
 		alert.ID, _ = uuid.Parse(idStr)
 		alert.OrganizationID, _ = uuid.Parse(orgStr)
+		if storeStr != nil {
+			storeID, _ := uuid.Parse(*storeStr)
+			alert.StoreID = &storeID
+		}
 		if itemStr != nil {
 			itemID, _ := uuid.Parse(*itemStr)
 			alert.ItemID = &itemID

@@ -1,3 +1,2 @@
--- Add track_stock flag to items for optional stock tracking
-ALTER TABLE items
-    ADD COLUMN track_stock BOOLEAN NOT NULL DEFAULT 1;
+-- track_stock is part of 000001_initial_schema in the fresh-start schema.
+-- This migration is intentionally a no-op to preserve sequence numbers.

@@ -45,6 +45,8 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	menuRepo := repository.NewMenuRepository(db)
+	storeRepo := repository.NewStoreRepository(db)
+	bindingRepo := repository.NewPlatformBindingRepository(db)
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
@@ -58,6 +60,8 @@ func main() {
 	movementHandler := handlers.NewMovementHandler(inventoryService, log)
 	orderHandler := handlers.NewOrderHandler(orderRepo, log)
 	menuHandler := handlers.NewMenuHandler(menuRepo, log)
+	storeHandler := handlers.NewStoreHandler(storeRepo, log)
+	bindingHandler := handlers.NewPlatformBindingHandler(bindingRepo, log)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -140,6 +144,18 @@ func main() {
 			// Menu (viewing)
 			r.Get("/menu", menuHandler.ListMenus)
 			r.Get("/menu/{restaurantId}", menuHandler.GetMenu)
+
+			// Stores
+			r.Get("/stores", storeHandler.List)
+			r.Post("/stores", storeHandler.Create)
+			r.Put("/stores/{id}", storeHandler.Update)
+			r.Delete("/stores/{id}", storeHandler.Deactivate)
+
+			// Platform bindings
+			r.Get("/platform-bindings", bindingHandler.List)
+			r.Post("/platform-bindings", bindingHandler.Create)
+			r.Put("/platform-bindings/{id}", bindingHandler.Update)
+			r.Delete("/platform-bindings/{id}", bindingHandler.Delete)
 		})
 	})
 

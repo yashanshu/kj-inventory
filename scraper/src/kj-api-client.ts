@@ -8,6 +8,8 @@ import axios, { type AxiosInstance } from 'axios';
 
 interface OrderPayload {
     platform: 'swiggy' | 'zomato';
+    restaurantId: string;
+    restaurantName?: string;
     externalOrderId: string;
     orderDate: string;
     customerName?: string;
@@ -60,6 +62,7 @@ export class KJApiClient {
     }
 
     async upsertMenu(payload: {
+        platform: 'swiggy' | 'zomato';
         restaurantId: string;
         restaurantName?: string;
         offersJson?: string;

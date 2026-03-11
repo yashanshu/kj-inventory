@@ -37,6 +37,14 @@ interface OrderNotification {
     status: string;
     orderDate: string;
     prepTime?: number;
+    customerDistance?: number; // km
+    itemComplexity?: number;   // total addon/variant count across all items
+}
+
+function formatPromoRow(offer: string, s: { orders: number; totalBill: number; totalNet: number; itemBurn: number }): string {
+    const avgNetPct = s.totalBill > 0 ? Math.round(s.totalNet / s.totalBill * 100) : 0;
+    const burnStr = s.itemBurn > 0 ? ` · burn ₹${s.itemBurn.toFixed(0)}` : '';
+    return `• ${offer} — ${s.orders} orders · avg net ${avgNetPct}%${burnStr}`;
 }
 
 export class NotificationService {
@@ -176,15 +184,141 @@ export class NotificationService {
         await Promise.allSettled(promises);
     }
 
-    async notifyPrepTimeOverdue(order: OrderNotification): Promise<void> {
-        const platformLabel = order.platform === 'zomato' ? 'Zomato' : 'Swiggy';
-        const restaurantLabel = order.restaurantName ? `${order.restaurantName} — ` : '';
+    async notifyPrepTimeOverdue(order: OrderNotification, minutesOverdue: number, alertNumber: number, activeOrders?: number): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
+        const last4 = order.orderId.slice(-4);
+        const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+        const overStr = minutesOverdue === 0 ? 'just exceeded' : `+${minutesOverdue} min overdue`;
+        const loadStr = activeOrders !== undefined && activeOrders > 1 ? ` · ${activeOrders} active` : '';
+
+        const waMessage = `⚠️ *OVERDUE #${alertNumber} · ...${last4} · ${platformLabel}${loadStr}*\n${overStr}\n${itemSummary || '—'}`;
+        const htmlMessage = `⚠️ <b>Prep Overdue #${alertNumber} — ...${last4} (${platformLabel}${loadStr})</b>\n<b>${overStr}</b>\n${itemSummary || '—'}`;
+
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram overdue alert failed:', err.message)));
+        }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(waMessage)
+                .catch(err => console.error('WhatsApp overdue alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyOrderReady(order: OrderNotification, _orderNumber: number, totalOverrunMinutes: number): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
+        const last4 = order.orderId.slice(-4);
         const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
 
-        const htmlMessage = `⚠️ <b>${restaurantLabel}Prep Time Overdue</b>\n\n<b>Order ID:</b> <code>${order.orderId}</code>\n<b>Platform:</b> ${platformLabel}\n<b>Customer:</b> ${order.customerName || 'Unknown'}\n<b>Items:</b> ${itemSummary || '—'}\n<b>Prep Time:</b> ${order.prepTime} mins (exceeded)`;
-        const plainMessage = `PREP TIME OVERDUE\n\nOrder ID: ${order.orderId} (${platformLabel})\nCustomer: ${order.customerName || 'Unknown'}\nItems: ${itemSummary || '—'}\nPrep Time: ${order.prepTime} mins (exceeded)`;
+        const waMessage = `✅ *READY · ...${last4} · ${platformLabel}*\nWas *${totalOverrunMinutes} min* overdue\n${itemSummary || '—'}`;
+        const htmlMessage = `✅ <b>Order Ready — ...${last4} (${platformLabel})</b>\nWas <b>${totalOverrunMinutes} min</b> overdue\n${itemSummary || '—'}`;
 
-        await this.sendAlertToAll(htmlMessage, plainMessage, 'Prep Time Overdue', `Order ${order.orderId} not ready after ${order.prepTime} mins`);
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram ready notification failed:', err.message)));
+        }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(waMessage)
+                .catch(err => console.error('WhatsApp ready notification failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyMFRMiss(order: OrderNotification): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
+        const last4 = order.orderId.slice(-4);
+        const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+
+        const htmlMessage = `📉 <b>MFR Miss — ...${last4} (${platformLabel})</b>\nPrep time prediction was not met. This affects your Swiggy ranking.\n${itemSummary || '—'}`;
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram MFR miss alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyHandoverDelay(order: OrderNotification, deWaitMinutes: number): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
+        const last4 = order.orderId.slice(-4);
+
+        const htmlMessage = `⏳ <b>Handover Delay — ...${last4} (${platformLabel})</b>\nDE waited <b>${deWaitMinutes} min</b> at the door. Swiggy may penalise this delay.`;
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram handover delay alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyComplaintOutlier(order: OrderNotification): Promise<void> {
+        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
+        const last4 = order.orderId.slice(-4);
+        const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+
+        const waMessage = `🚨 *COMPLAINT OUTLIER · ...${last4} · ${platformLabel}*\nSwiggy has flagged unusual complaint activity on this order.\n${itemSummary || '—'}`;
+        const htmlMessage = `🚨 <b>Complaint Outlier — ...${last4} (${platformLabel})</b>\nSwiggy has flagged unusual complaint activity on this order.\n${itemSummary || '—'}`;
+
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram complaint outlier alert failed:', err.message)));
+        }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(waMessage)
+                .catch(err => console.error('WhatsApp complaint outlier alert failed:', err.message)));
+        }
+        if (this.fcmInitialized && config.firebaseFcmToken) {
+            promises.push(admin.messaging().send({
+                token: config.firebaseFcmToken,
+                notification: { title: '🚨 Complaint Outlier', body: `...${last4} (${platformLabel}) — unusual complaint activity` },
+                android: { priority: 'high', notification: { channelId: 'orders', sound: 'default' } },
+            }).then(() => { }).catch(err => console.error('FCM complaint outlier alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyPromoMarginAlert(lowMarginOffers: [string, { orders: number; totalBill: number; totalNet: number; itemBurn: number }][], thresholdPct: number): Promise<void> {
+        const lines = lowMarginOffers.map(([offer, s]) => formatPromoRow(offer, s));
+
+        const htmlMessage = `⚠️ <b>Promo Margin Alert</b>\nOffers below ${thresholdPct}% avg net today:\n${lines.join('\n')}`;
+        const waMessage = `⚠️ *Promo Margin Alert*\nOffers below ${thresholdPct}% avg net today:\n${lines.join('\n')}`;
+
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram promo alert failed:', err.message)));
+        }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(waMessage)
+                .catch(err => console.error('WhatsApp promo alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
+    }
+
+    async notifyKitchenStress(restaurantName: string): Promise<void> {
+        const waMessage = `🔥 *KITCHEN STRESS · ${restaurantName}*\nSwiggy thinks the kitchen is under stress. Consider pausing new orders or increasing prep time.`;
+        const htmlMessage = `🔥 <b>Kitchen Stress — ${restaurantName}</b>\nSwiggy thinks the kitchen is under stress. Consider pausing new orders or increasing prep time.`;
+
+        const promises: Promise<void>[] = [];
+        if (this.telegramBot && config.telegramChatId) {
+            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
+                .then(() => { }).catch(err => console.error('Telegram stress alert failed:', err.message)));
+        }
+        if (this.whatsApp) {
+            promises.push(this.whatsApp.sendMessage(waMessage)
+                .catch(err => console.error('WhatsApp stress alert failed:', err.message)));
+        }
+        if (this.fcmInitialized && config.firebaseFcmToken) {
+            promises.push(admin.messaging().send({
+                token: config.firebaseFcmToken,
+                notification: { title: '🔥 Kitchen Stress', body: `${restaurantName} — Swiggy flagged kitchen stress` },
+                android: { priority: 'high', notification: { channelId: 'orders', sound: 'default' } },
+            }).then(() => { }).catch(err => console.error('FCM stress alert failed:', err.message)));
+        }
+        await Promise.allSettled(promises);
     }
 
     async notifySessionExpired(): Promise<void> {
@@ -238,7 +372,7 @@ export class NotificationService {
         await Promise.allSettled(promises);
     }
 
-    async sendDailySummary(data: any): Promise<void> {
+    async sendDailySummary(data: any, overdueLog: Array<{last4: string; platform: string; itemSummary: string; resolvedOverrunMinutes: number | null}> = [], mfrLog: { hits: number; misses: number } = { hits: 0, misses: 0 }, promoStats: Map<string, { orders: number; totalBill: number; totalNet: number; itemBurn: number }> = new Map()): Promise<void> {
         if (!data || !data.businessMetricsDetailsV3) {
             console.error('Invalid summary data');
             return;
@@ -275,6 +409,47 @@ export class NotificationService {
         const menuOpens = getFunnelVal('MENU OPENS');
         const cartBuilds = getFunnelVal('CART BUILDS');
 
+        // Build MFR section for 7am report
+        const mfrTotal = mfrLog.hits + mfrLog.misses;
+        const mfrSection = mfrTotal > 0
+            ? `<b>MFR (Prep Accuracy)</b>\n• Met: <b>${mfrLog.hits}</b> / Missed: <b>${mfrLog.misses}</b> (${Math.round(mfrLog.hits / mfrTotal * 100)}%)`
+            : '<b>MFR (Prep Accuracy)</b> — no data';
+        const mfrWaSection = mfrTotal > 0
+            ? `*MFR (Prep Accuracy)*\n• Met: *${mfrLog.hits}* / Missed: *${mfrLog.misses}* (${Math.round(mfrLog.hits / mfrTotal * 100)}%)`
+            : '*MFR (Prep Accuracy)* — no data';
+
+        // Build overdue section for 7am report
+        let overdueSection = '';
+        let overdueWaSection = '';
+        if (overdueLog.length === 0) {
+            overdueSection = '<b>Prep Time</b> ✅ All orders within time';
+            overdueWaSection = '*Prep Time* ✅ All orders within time';
+        } else {
+            const rows = overdueLog.map(e => {
+                const resolved = e.resolvedOverrunMinutes !== null ? `+${e.resolvedOverrunMinutes} min` : 'unresolved';
+                return `• ...${e.last4} · ${e.platform} · ${resolved} — ${e.itemSummary}`;
+            });
+            const resolvedEntries = overdueLog.filter(e => e.resolvedOverrunMinutes !== null);
+            const avgStr = resolvedEntries.length > 0
+                ? ` | Avg: ${Math.round(resolvedEntries.reduce((s, e) => s + (e.resolvedOverrunMinutes ?? 0), 0) / resolvedEntries.length)} min`
+                : '';
+            const count = overdueLog.length;
+            overdueSection = `<b>Prep Time Exceeded (${count} order${count > 1 ? 's' : ''})</b>\n${rows.join('\n')}${avgStr}`;
+            overdueWaSection = `*Prep Time Exceeded (${count} order${count > 1 ? 's' : ''})*\n${rows.join('\n')}${avgStr}`;
+        }
+
+        // Build promo efficiency section for 7am report
+        let promoSection = '';
+        let promoWaSection = '';
+        if (promoStats.size === 0) {
+            promoSection = '<b>Promo Efficiency</b> — no promo orders';
+            promoWaSection = '*Promo Efficiency* — no promo orders';
+        } else {
+            const promoRows = Array.from(promoStats.entries()).map(([offer, s]) => formatPromoRow(offer, s));
+            promoSection = `<b>Promo Efficiency</b>\n${promoRows.join('\n')}`;
+            promoWaSection = `*Promo Efficiency*\n${promoRows.join('\n')}`;
+        }
+
         // Format Date
         const dateStr = data.businessMetricsDetailsV3.subTitleV2?.value
             ? data.businessMetricsDetailsV3.subTitleV2.value.replace('{{date}}', data.businessMetricsDetailsV3.subTitleV2.attribute_values?.date?.value || '')
@@ -297,7 +472,13 @@ ${dateStr}
 <b>Funnel (Conversion)</b>
 • Impressions: <b>${impressions}</b>
 • Menu Opens: <b>${menuOpens}</b>
-• Cart Builds: <b>${cartBuilds}</b>`;
+• Cart Builds: <b>${cartBuilds}</b>
+
+${mfrSection}
+
+${overdueSection}
+
+${promoSection}`;
 
         const waMessage = `*Daily Business Summary*
 ${dateStr}
@@ -316,7 +497,13 @@ ${dateStr}
 *Funnel (Conversion)*
 • Impressions: *${impressions}*
 • Menu Opens: *${menuOpens}*
-• Cart Builds: *${cartBuilds}*`;
+• Cart Builds: *${cartBuilds}*
+
+${mfrWaSection}
+
+${overdueWaSection}
+
+${promoWaSection}`;
 
         const promises: Promise<void>[] = [];
 
@@ -359,6 +546,18 @@ ${dateStr}
         }
 
         await Promise.allSettled(promises);
+    }
+
+    private computeRiskTag(order: OrderNotification): 'HIGH' | 'MEDIUM' | null {
+        if (order.orderValue <= 0) return null;
+        const marginPct = (order.netEarnings / order.orderValue) * 100;
+        const lowMargin = marginPct < 50;
+        const farDistance = (order.customerDistance ?? 0) > config.riskDistanceKm;
+        const hasComplexity = (order.itemComplexity ?? 0) > 0;
+
+        if (!lowMargin) return null;
+        if (farDistance || hasComplexity) return 'HIGH';
+        return 'MEDIUM';
     }
 
     private formatISTDateTime(isoString: string): string {
@@ -407,6 +606,14 @@ ${dateStr}
             discountRow = `<b>Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
         }
 
+        const marginPct = order.orderValue > 0
+            ? Math.round(order.netEarnings / order.orderValue * 100)
+            : 0;
+        const riskTag = this.computeRiskTag(order);
+        const riskRow = riskTag
+            ? `\n<b>Risk:</b> ${riskTag === 'HIGH' ? '🔴 HIGH' : '🟡 MEDIUM'}`
+            : '';
+
         return `
 <b>${restaurantLabel}New ${platformLabel} Order #${orderNumber}</b>
 
@@ -420,35 +627,44 @@ ${itemsList || '  (items not available)'}
 
 <b>Subtotal:</b> ₹${order.subtotal.toFixed(0)}
 ${packingRow}<b>Order Value:</b> ₹${order.orderValue.toFixed(0)}
-${discountRow}<b>Net Earnings:</b> ₹${order.netEarnings.toFixed(0)}
-`.trim();
+${discountRow}<b>Net Earnings:</b> ₹${order.netEarnings.toFixed(0)} (${marginPct}%)
+${riskRow}`.trim();
     }
 
     private formatWhatsAppMessage(order: OrderNotification, orderNumber: number): string {
         const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
         const prepTime = order.prepTime ? `${order.prepTime} mins` : 'N/A';
         const orderTime = this.formatISTDateTime(order.orderDate);
+        const last4 = order.orderId.slice(-4);
 
         const itemsList = order.items.map(item => {
             const parts: string[] = [];
             if (item.variant) parts.push(item.variant);
             if (item.addons && item.addons.length > 0) parts.push(...item.addons);
             const suffix = parts.length > 0 ? `\n    _${parts.join(' + ')}_` : '';
-            return `*${item.quantity}x*  ${item.name}${suffix}`;
+            return `*${item.quantity}x* ${item.name}${suffix}`;
         }).join('\n');
 
-        const siRow = order.specialInstructions ? `\n*Note:* _${order.specialInstructions}_\n` : '';
-        const areaRow = order.customerArea ? `*Area:* ${order.customerArea}` : '';
+        const areaRow = order.customerArea ? `\n*Area:* ${order.customerArea}` : '';
+        const siRow = order.specialInstructions ? `\n*Note:* _${order.specialInstructions}_` : '';
 
-        return `
-*KOT — ORDER #${orderNumber} — ${platformLabel}*
-*Prep: ${prepTime}*  |  ${orderTime}
+        const marginPct = order.orderValue > 0
+            ? Math.round(order.netEarnings / order.orderValue * 100)
+            : 0;
+        let netRow = `\n*Net:* ₹${order.netEarnings.toFixed(0)} (${marginPct}%)`;
+        if (order.restaurantDiscount > 0) {
+            const offerText = order.offerDescription ? ` · _${order.offerDescription}_` : '';
+            netRow += offerText;
+        }
+        const riskTag = this.computeRiskTag(order);
+        if (riskTag) {
+            netRow += ` · *${riskTag === 'HIGH' ? '🔴 HIGH RISK' : '🟡 MEDIUM RISK'}*`;
+        }
 
-————————————————
-${itemsList || '(items not available)'}
-————————————————
-${areaRow}${siRow}
-`.trim();
+        return `*KOT #${orderNumber} · ...${last4} · ${platformLabel}*
+*Prep:* ${prepTime}  |  ${orderTime}
+
+${itemsList || '(items not available)'}${areaRow}${siRow}${netRow}`;
     }
 
     async shutdown(): Promise<void> {

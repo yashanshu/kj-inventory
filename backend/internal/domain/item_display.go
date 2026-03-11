@@ -9,6 +9,7 @@ import (
 type ItemDisplay struct {
 	ID                string    `json:"id"`
 	OrganizationID    string    `json:"organizationId"`
+	StoreID           string    `json:"storeId"`
 	CategoryID        string    `json:"categoryId"`
 	Name              string    `json:"name"`
 	SKU               *string   `json:"sku"`
@@ -39,6 +40,7 @@ func (i *Item) ToDisplay() (*ItemDisplay, error) {
 	return &ItemDisplay{
 		ID:                i.ID.String(),
 		OrganizationID:    i.OrganizationID.String(),
+		StoreID:           i.StoreID.String(),
 		CategoryID:        i.CategoryID.String(),
 		Name:              i.Name,
 		SKU:               i.SKU,

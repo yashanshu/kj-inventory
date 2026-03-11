@@ -176,10 +176,21 @@ func (h *InventoryHandler) GetItems(w http.ResponseWriter, r *http.Request) {
 		catUUID = &parsedCatID
 	}
 
+	// Parse optional storeID filter
+	var storeUUID *uuid.UUID
+	if storeIDStr := r.URL.Query().Get("store_id"); storeIDStr != "" {
+		parsed, err := uuid.Parse(storeIDStr)
+		if err != nil {
+			utils.RespondError(w, http.StatusBadRequest, "INVALID_STORE_ID", "Invalid store ID", nil)
+			return
+		}
+		storeUUID = &parsed
+	}
+
 	// Parse lowStock filter
 	lowStockOnly := lowStock == "true"
 
-	paginatedItems, err := h.inventoryService.ListItemsWithFiltersPaginated(r.Context(), orgUUID, search, catUUID, lowStockOnly, limit, offset)
+	paginatedItems, err := h.inventoryService.ListItemsWithFiltersPaginated(r.Context(), orgUUID, search, catUUID, storeUUID, lowStockOnly, limit, offset)
 	if err != nil {
 		h.log.Error("Failed to list items", err)
 		utils.RespondError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", nil)

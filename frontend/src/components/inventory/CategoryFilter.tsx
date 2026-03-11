@@ -7,44 +7,58 @@ interface CategoryFilterProps {
   isLoading?: boolean;
 }
 
-export function CategoryFilter({
-  categories,
-  selectedCategoryId,
-  onSelectCategory,
-}: CategoryFilterProps) {
+export function CategoryFilter({ categories, selectedCategoryId, onSelectCategory }: CategoryFilterProps) {
   return (
-    <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+    <div style={{ display: 'flex', gap: '0.375rem', overflowX: 'auto', paddingBottom: 2 }} className="scrollbar-hide">
       <button
         onClick={() => onSelectCategory(null)}
-        className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-          !selectedCategoryId
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
+        style={{
+          flexShrink: 0,
+          padding: '0.3125rem 0.875rem',
+          borderRadius: 99,
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          border: '1px solid',
+          borderColor: !selectedCategoryId ? 'var(--brand-600)' : 'var(--neutral-200)',
+          background: !selectedCategoryId ? 'var(--brand-600)' : 'var(--neutral-0)',
+          color: !selectedCategoryId ? '#fff' : 'var(--neutral-600)',
+        }}
       >
         All
       </button>
-      {categories
-        .filter((cat) => cat.id)
-        .map((category) => (
+      {categories.filter((cat) => cat.id).map((category) => {
+        const isSelected = selectedCategoryId === category.id;
+        const color = category.color || '#6366f1';
+        return (
           <button
             key={category.id}
             onClick={() => onSelectCategory(category.id)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              selectedCategoryId === category.id
-                ? 'text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
             style={{
-              backgroundColor:
-                selectedCategoryId === category.id
-                  ? category.color || '#3B82F6'
-                  : undefined,
+              flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: '0.3125rem',
+              padding: '0.3125rem 0.75rem',
+              borderRadius: 99,
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              border: `1px solid ${isSelected ? color : 'var(--neutral-200)'}`,
+              background: isSelected ? color : 'var(--neutral-0)',
+              color: isSelected ? '#fff' : 'var(--neutral-600)',
             }}
           >
+            {!isSelected && (
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                background: color,
+              }} />
+            )}
             {category.name}
           </button>
-        ))}
+        );
+      })}
     </div>
   );
 }

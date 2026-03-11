@@ -17,6 +17,7 @@ export interface Order {
     totalAmount: number;
     status: string;
     itemsJson?: string;
+    storeId?: string;
     createdAt: string;
 }
 
@@ -38,6 +39,7 @@ export interface OrderFilters {
     endDate?: string;
     limit?: number;
     offset?: number;
+    storeId?: string;
 }
 
 export const ordersService = {
@@ -48,6 +50,7 @@ export const ordersService = {
         if (filters.offset) params.offset = filters.offset;
         if (filters.startDate) params.startDate = filters.startDate;
         if (filters.endDate) params.endDate = filters.endDate;
+        if (filters.storeId) params.store_id = filters.storeId;
 
         return apiClient.get<Order[]>('/orders', params);
     },

@@ -27,7 +27,7 @@ func (m *mockItemRepo) List(ctx context.Context, orgID uuid.UUID, limit, offset 
 	return m.items, nil
 }
 
-func (m *mockItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+func (m *mockItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
 	// Simulate pagination by slicing the items
 	start := offset
 	end := offset + limit
@@ -40,7 +40,7 @@ func (m *mockItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, sea
 	return m.items[start:end], nil
 }
 
-func (m *mockItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+func (m *mockItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool) (int, error) {
 	return len(m.items), nil
 }
 
@@ -178,7 +178,7 @@ func TestInventoryService_ListItemsWithFiltersPaginated(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := service.ListItemsWithFiltersPaginated(
-				ctx, orgID, "", nil, false, tt.limit, tt.offset,
+				ctx, orgID, "", nil, nil, false, tt.limit, tt.offset,
 			)
 			if err != nil {
 				t.Fatalf("ListItemsWithFiltersPaginated: %v", err)
@@ -214,7 +214,7 @@ func TestInventoryService_ListItemsWithFiltersPaginated_EmptyResults(t *testing.
 	)
 
 	result, err := service.ListItemsWithFiltersPaginated(
-		ctx, orgID, "", nil, false, 10, 0,
+		ctx, orgID, "", nil, nil, false, 10, 0,
 	)
 	if err != nil {
 		t.Fatalf("ListItemsWithFiltersPaginated: %v", err)
@@ -253,11 +253,11 @@ func (m *mockItemRepoWithStock) List(ctx context.Context, orgID uuid.UUID, limit
 	return []*domain.Item{}, nil
 }
 
-func (m *mockItemRepoWithStock) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+func (m *mockItemRepoWithStock) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
 	return []*domain.Item{}, nil
 }
 
-func (m *mockItemRepoWithStock) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+func (m *mockItemRepoWithStock) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool) (int, error) {
 	return 0, nil
 }
 

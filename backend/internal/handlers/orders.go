@@ -77,6 +77,8 @@ func (h *OrderHandler) IngestOrder(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	o := &domain.ExternalOrder{
 		Platform:        req.Platform,
+		RestaurantID:    req.RestaurantID,
+		RestaurantName:  req.RestaurantName,
 		ExternalOrderID: req.ExternalOrderID,
 		OrderDate:       orderDate,
 		CustomerName:    req.CustomerName,
@@ -109,6 +111,10 @@ func (h *OrderHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	filters := domain.OrderFilters{
 		Platform: r.URL.Query().Get("platform"),
 		Limit:    50,
+	}
+
+	if storeIDStr := r.URL.Query().Get("store_id"); storeIDStr != "" {
+		filters.StoreID = &storeIDStr
 	}
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {

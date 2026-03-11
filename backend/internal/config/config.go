@@ -109,8 +109,21 @@ func splitAndTrim(value string) []string {
 }
 
 func normalizeSQLiteDSN(dsn string) string {
-	if dsn == "" || strings.HasPrefix(dsn, "file:") || strings.Contains(dsn, "://") {
+	if dsn == "" || strings.Contains(dsn, "://") {
 		return dsn
 	}
-	return "file:" + dsn
+
+	if !strings.HasPrefix(dsn, "file:") {
+		return "file:" + dsn
+	}
+
+	if strings.HasPrefix(dsn, "file:./backend/") {
+		if _, err := os.Stat("backend"); err != nil {
+			if _, dataErr := os.Stat("data"); dataErr == nil {
+				return "file:./" + strings.TrimPrefix(dsn, "file:./backend/")
+			}
+		}
+	}
+
+	return dsn
 }

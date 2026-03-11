@@ -19,13 +19,24 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 func (r *OrderRepository) Create(o *domain.ExternalOrder) error {
 	query := `
 		INSERT INTO external_orders (
-			platform, external_order_id, order_date, customer_name,
-			total_amount, status, items_json, raw_data, notified_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			organization_id, store_id, platform_binding_id, platform,
+			restaurant_id, restaurant_name, external_order_id, order_date,
+			customer_name, total_amount, status, items_json, raw_data, notified_at
+		) VALUES (
+			(SELECT organization_id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			(SELECT store_id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			(SELECT id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)
 	`
 
 	result, err := r.db.Exec(query,
+		o.Platform, o.RestaurantID,
+		o.Platform, o.RestaurantID,
+		o.Platform, o.RestaurantID,
 		o.Platform,
+		o.RestaurantID,
+		o.RestaurantName,
 		o.ExternalOrderID,
 		o.OrderDate,
 		o.CustomerName,
@@ -57,13 +68,13 @@ func (r *OrderRepository) UpdateStatus(id int64, status string) error {
 func (r *OrderRepository) GetByExternalID(platform, externalID string) (*domain.ExternalOrder, error) {
 	var o domain.ExternalOrder
 	query := `
-		SELECT id, platform, external_order_id, order_date, customer_name,
+		SELECT id, platform, restaurant_id, restaurant_name, external_order_id, order_date, customer_name,
 		       total_amount, status, items_json, raw_data, notified_at, created_at
 		FROM external_orders 
 		WHERE platform = ? AND external_order_id = ?
 	`
 	row := r.db.QueryRow(query, platform, externalID)
-	err := row.Scan(&o.ID, &o.Platform, &o.ExternalOrderID, &o.OrderDate, &o.CustomerName,
+	err := row.Scan(&o.ID, &o.Platform, &o.RestaurantID, &o.RestaurantName, &o.ExternalOrderID, &o.OrderDate, &o.CustomerName,
 		&o.TotalAmount, &o.Status, &o.ItemsJSON, &o.RawData, &o.NotifiedAt, &o.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -77,7 +88,7 @@ func (r *OrderRepository) GetByExternalID(platform, externalID string) (*domain.
 // List returns orders with optional filters
 func (r *OrderRepository) List(filters domain.OrderFilters) ([]domain.ExternalOrder, error) {
 	query := `
-		SELECT id, platform, external_order_id, order_date, customer_name,
+		SELECT id, store_id, platform, restaurant_id, restaurant_name, external_order_id, order_date, customer_name,
 		       total_amount, status, items_json, raw_data, notified_at, created_at
 		FROM external_orders
 		WHERE 1=1
@@ -95,6 +106,10 @@ func (r *OrderRepository) List(filters domain.OrderFilters) ([]domain.ExternalOr
 	if filters.EndDate != nil {
 		query += " AND order_date <= ?"
 		args = append(args, filters.EndDate)
+	}
+	if filters.StoreID != nil {
+		query += " AND store_id = ?"
+		args = append(args, *filters.StoreID)
 	}
 
 	query += " ORDER BY order_date DESC"
@@ -117,7 +132,7 @@ func (r *OrderRepository) List(filters domain.OrderFilters) ([]domain.ExternalOr
 	var orders []domain.ExternalOrder
 	for rows.Next() {
 		var o domain.ExternalOrder
-		err := rows.Scan(&o.ID, &o.Platform, &o.ExternalOrderID, &o.OrderDate, &o.CustomerName,
+		err := rows.Scan(&o.ID, &o.StoreID, &o.Platform, &o.RestaurantID, &o.RestaurantName, &o.ExternalOrderID, &o.OrderDate, &o.CustomerName,
 			&o.TotalAmount, &o.Status, &o.ItemsJSON, &o.RawData, &o.NotifiedAt, &o.CreatedAt)
 		if err != nil {
 			return nil, err

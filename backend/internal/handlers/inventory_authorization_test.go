@@ -195,11 +195,11 @@ func (s *stubItemRepo) List(ctx context.Context, orgID uuid.UUID, limit, offset 
 	return s.listWithFiltersItems, nil
 }
 
-func (s *stubItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+func (s *stubItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
 	return s.listWithFiltersItems, nil
 }
 
-func (s *stubItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+func (s *stubItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool) (int, error) {
 	return len(s.listWithFiltersItems), nil
 }
 

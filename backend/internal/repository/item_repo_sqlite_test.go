@@ -23,6 +23,7 @@ func openInMemoryDB(t *testing.T) *sql.DB {
 	CREATE TABLE items (
 		id TEXT PRIMARY KEY,
 		organization_id TEXT NOT NULL,
+		store_id TEXT NOT NULL,
 		category_id TEXT NOT NULL,
 		name TEXT NOT NULL,
 		sku TEXT,
@@ -50,9 +51,11 @@ func TestItemRepository_Create_Get_List(t *testing.T) {
 	repo := repository.NewItemRepository(db)
 
 	orgID := uuid.New()
+	storeID := uuid.New()
 	catID := uuid.New()
 	item := &domain.Item{
 		OrganizationID:    orgID,
+		StoreID:           storeID,
 		CategoryID:        catID,
 		Name:              "Widget",
 		UnitOfMeasurement: "pcs",
@@ -96,6 +99,7 @@ func TestItemRepository_UpdateStock(t *testing.T) {
 
 	item := &domain.Item{
 		OrganizationID:    uuid.New(),
+		StoreID:           uuid.New(),
 		CategoryID:        uuid.New(),
 		Name:              "Thing",
 		UnitOfMeasurement: "kg",
@@ -123,12 +127,14 @@ func TestItemRepository_ListWithFilters_Pagination(t *testing.T) {
 	repo := repository.NewItemRepository(db)
 
 	orgID := uuid.New()
+	storeID := uuid.New()
 	catID := uuid.New()
 
 	// Create 25 items for pagination testing
 	for i := 1; i <= 25; i++ {
 		item := &domain.Item{
 			OrganizationID:    orgID,
+			StoreID:           storeID,
 			CategoryID:        catID,
 			Name:              "Item " + string(rune('A'+i-1)),
 			UnitOfMeasurement: "pcs",
@@ -159,7 +165,7 @@ func TestItemRepository_ListWithFilters_Pagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			items, err := repo.ListWithFilters(ctx, orgID, "", nil, false, tt.limit, tt.offset)
+			items, err := repo.ListWithFilters(ctx, orgID, "", nil, nil, false, tt.limit, tt.offset)
 			if err != nil {
 				t.Fatalf("ListWithFilters: %v", err)
 			}
@@ -178,6 +184,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 	repo := repository.NewItemRepository(db)
 
 	orgID := uuid.New()
+	storeID := uuid.New()
 	catID1 := uuid.New()
 	catID2 := uuid.New()
 
@@ -185,6 +192,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 	items := []*domain.Item{
 		{
 			OrganizationID:    orgID,
+			StoreID:           storeID,
 			CategoryID:        catID1,
 			Name:              "Apple",
 			UnitOfMeasurement: "kg",
@@ -195,6 +203,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 		},
 		{
 			OrganizationID:    orgID,
+			StoreID:           storeID,
 			CategoryID:        catID1,
 			Name:              "Banana",
 			UnitOfMeasurement: "kg",
@@ -205,6 +214,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 		},
 		{
 			OrganizationID:    orgID,
+			StoreID:           storeID,
 			CategoryID:        catID2,
 			Name:              "Orange",
 			UnitOfMeasurement: "kg",
@@ -215,6 +225,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 		},
 		{
 			OrganizationID:    orgID,
+			StoreID:           storeID,
 			CategoryID:        catID2,
 			Name:              "Grape",
 			UnitOfMeasurement: "kg",
@@ -251,7 +262,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, err := repo.CountWithFilters(ctx, orgID, tt.search, tt.categoryID, tt.lowStockOnly)
+			count, err := repo.CountWithFilters(ctx, orgID, tt.search, tt.categoryID, nil, tt.lowStockOnly)
 			if err != nil {
 				t.Fatalf("CountWithFilters: %v", err)
 			}
@@ -260,7 +271,7 @@ func TestItemRepository_CountWithFilters(t *testing.T) {
 			}
 
 			// Verify that CountWithFilters matches ListWithFilters
-			items, err := repo.ListWithFilters(ctx, orgID, tt.search, tt.categoryID, tt.lowStockOnly, 100, 0)
+			items, err := repo.ListWithFilters(ctx, orgID, tt.search, tt.categoryID, nil, tt.lowStockOnly, 100, 0)
 			if err != nil {
 				t.Fatalf("ListWithFilters: %v", err)
 			}

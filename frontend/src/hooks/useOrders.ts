@@ -2,11 +2,14 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ordersService, type OrderFilters, type Order, type OrderStats } from '../services/orders';
+import { useStoreFilterStore } from '../store/storeFilterStore';
 
 export function useOrders(filters: OrderFilters = {}) {
+    const selectedStoreId = useStoreFilterStore(s => s.selectedStoreId);
+    const effectiveFilters = { ...filters, storeId: selectedStoreId ?? undefined };
     return useQuery<Order[]>({
-        queryKey: ['orders', filters],
-        queryFn: () => ordersService.getOrders(filters),
+        queryKey: ['orders', effectiveFilters],
+        queryFn: () => ordersService.getOrders(effectiveFilters),
     });
 }
 

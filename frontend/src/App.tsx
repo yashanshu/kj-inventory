@@ -12,6 +12,8 @@ import { InventoryPage } from './pages/InventoryPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { MenuPage } from './pages/MenuPage';
 import { Layout } from './components/Layout';
+import { StoresPage } from './pages/StoresPage';
+import { PlatformBindingsPage } from './pages/PlatformBindingsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,8 +33,25 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--neutral-50)', flexDirection: 'column', gap: '0.875rem',
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            width: 18, height: 18,
+            border: '2.5px solid rgb(255 255 255 / 0.3)',
+            borderTopColor: '#fff',
+            borderRadius: '50%',
+            animation: 'spin 0.75s linear infinite',
+          }} />
+        </div>
+        <span style={{ fontSize: '0.875rem', color: 'var(--neutral-500)' }}>Loading…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -55,6 +74,8 @@ function App() {
                     <Route path="/inventory" element={<InventoryPage />} />
                     <Route path="/orders" element={<OrdersPage />} />
                     <Route path="/menu" element={<MenuPage />} />
+                    <Route path="/admin/stores" element={<StoresPage />} />
+                    <Route path="/admin/bindings" element={<PlatformBindingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

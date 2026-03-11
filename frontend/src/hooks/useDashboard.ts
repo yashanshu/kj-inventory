@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { dashboardService } from '../services/dashboard';
+import { useStoreFilterStore } from '../store/storeFilterStore';
 
 // Query keys
 export const dashboardKeys = {
@@ -16,10 +17,11 @@ export const dashboardKeys = {
 
 // Dashboard hooks
 export function useDashboardMetrics() {
+  const selectedStoreId = useStoreFilterStore(s => s.selectedStoreId);
   return useQuery({
-    queryKey: dashboardKeys.metrics(),
-    queryFn: () => dashboardService.getMetrics(),
-    refetchInterval: 30000, // Refetch every 30 seconds
+    queryKey: [...dashboardKeys.metrics(), selectedStoreId],
+    queryFn: () => dashboardService.getMetrics(selectedStoreId ?? undefined),
+    refetchInterval: 30000,
   });
 }
 

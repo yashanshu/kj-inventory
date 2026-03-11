@@ -36,11 +36,11 @@ func (m *mockItemRepo) List(ctx context.Context, orgID uuid.UUID, limit, offset 
 	return []*domain.Item{}, nil
 }
 
-func (m *mockItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+func (m *mockItemRepo) ListWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
 	return []*domain.Item{}, nil
 }
 
-func (m *mockItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool) (int, error) {
+func (m *mockItemRepo) CountWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool) (int, error) {
 	return 0, nil
 }
 
@@ -118,6 +118,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		CREATE TABLE items (
 			id TEXT PRIMARY KEY,
 			organization_id TEXT NOT NULL,
+			store_id TEXT NOT NULL,
 			category_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			sku TEXT,
@@ -167,6 +168,7 @@ func TestDashboardService_GetMetrics(t *testing.T) {
 
 	service := NewDashboardService(&mockItemRepo{}, &mockMovementRepo{}, &mockAlertRepo{}, db)
 	orgID := uuid.New()
+	storeID := uuid.New()
 
 	// Insert test data
 	catID := uuid.New()
@@ -178,25 +180,25 @@ func TestDashboardService_GetMetrics(t *testing.T) {
 	// Item 1: Normal stock
 	item1ID := uuid.New()
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
-		VALUES (?, ?, ?, 'Item 1', 'pcs', 10, 50, 100.0, 1, 1)
-	`, item1ID.String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Item 1', 'pcs', 10, 50, 100.0, 1, 1)
+	`, item1ID.String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	// Item 2: Low stock
 	item2ID := uuid.New()
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
-		VALUES (?, ?, ?, 'Item 2', 'pcs', 20, 5, 50.0, 1, 1)
-	`, item2ID.String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Item 2', 'pcs', 20, 5, 50.0, 1, 1)
+	`, item2ID.String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	// Item 3: Out of stock
 	item3ID := uuid.New()
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
-		VALUES (?, ?, ?, 'Item 3', 'pcs', 10, 0, 75.0, 1, 1)
-	`, item3ID.String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Item 3', 'pcs', 10, 0, 75.0, 1, 1)
+	`, item3ID.String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	// Add some movements
@@ -290,6 +292,7 @@ func TestDashboardService_GetStockTrends(t *testing.T) {
 
 	service := NewDashboardService(&mockItemRepo{}, &mockMovementRepo{}, &mockAlertRepo{}, db)
 	orgID := uuid.New()
+	storeID := uuid.New()
 
 	// Insert test data
 	catID := uuid.New()
@@ -300,9 +303,9 @@ func TestDashboardService_GetStockTrends(t *testing.T) {
 
 	itemID := uuid.New()
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
-		VALUES (?, ?, ?, 'Test Item', 'pcs', 10, 50, 1, 1)
-	`, itemID.String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Test Item', 'pcs', 10, 50, 1, 1)
+	`, itemID.String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	userID := uuid.New()
@@ -331,6 +334,7 @@ func TestDashboardService_GetCategoryBreakdown(t *testing.T) {
 
 	service := NewDashboardService(&mockItemRepo{}, &mockMovementRepo{}, &mockAlertRepo{}, db)
 	orgID := uuid.New()
+	storeID := uuid.New()
 
 	// Insert categories
 	cat1ID := uuid.New()
@@ -347,19 +351,19 @@ func TestDashboardService_GetCategoryBreakdown(t *testing.T) {
 
 	// Insert items in Electronics
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
 		VALUES
-			(?, ?, ?, 'Laptop', 'pcs', 5, 10, 50000.0, 1, 1),
-			(?, ?, ?, 'Mouse', 'pcs', 20, 50, 500.0, 1, 1)
-	`, uuid.New().String(), orgID.String(), cat1ID.String(),
-		uuid.New().String(), orgID.String(), cat1ID.String())
+			(?, ?, ?, ?, 'Laptop', 'pcs', 5, 10, 50000.0, 1, 1),
+			(?, ?, ?, ?, 'Mouse', 'pcs', 20, 50, 500.0, 1, 1)
+	`, uuid.New().String(), orgID.String(), storeID.String(), cat1ID.String(),
+		uuid.New().String(), orgID.String(), storeID.String(), cat1ID.String())
 	require.NoError(t, err)
 
 	// Insert items in Furniture
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
-		VALUES (?, ?, ?, 'Chair', 'pcs', 10, 25, 2000.0, 1, 1)
-	`, uuid.New().String(), orgID.String(), cat2ID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, unit_cost, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Chair', 'pcs', 10, 25, 2000.0, 1, 1)
+	`, uuid.New().String(), orgID.String(), storeID.String(), cat2ID.String())
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -384,6 +388,7 @@ func TestDashboardService_GetLowStockItems(t *testing.T) {
 
 	service := NewDashboardService(&mockItemRepo{}, &mockMovementRepo{}, &mockAlertRepo{}, db)
 	orgID := uuid.New()
+	storeID := uuid.New()
 
 	catID := uuid.New()
 	_, err := db.Exec(`
@@ -393,23 +398,23 @@ func TestDashboardService_GetLowStockItems(t *testing.T) {
 
 	// Low stock item (critical)
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
-		VALUES (?, ?, ?, 'Critical Item', 'pcs', 50, 2, 1, 1)
-	`, uuid.New().String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Critical Item', 'pcs', 50, 2, 1, 1)
+	`, uuid.New().String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	// Low stock item (moderate)
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
-		VALUES (?, ?, ?, 'Moderate Item', 'pcs', 20, 15, 1, 1)
-	`, uuid.New().String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Moderate Item', 'pcs', 20, 15, 1, 1)
+	`, uuid.New().String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	// Normal stock item (should not appear)
 	_, err = db.Exec(`
-		INSERT INTO items (id, organization_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
-		VALUES (?, ?, ?, 'Normal Item', 'pcs', 10, 50, 1, 1)
-	`, uuid.New().String(), orgID.String(), catID.String())
+		INSERT INTO items (id, organization_id, store_id, category_id, name, unit_of_measurement, minimum_threshold, current_stock, is_active, track_stock)
+		VALUES (?, ?, ?, ?, 'Normal Item', 'pcs', 10, 50, 1, 1)
+	`, uuid.New().String(), orgID.String(), storeID.String(), catID.String())
 	require.NoError(t, err)
 
 	ctx := context.Background()

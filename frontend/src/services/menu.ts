@@ -39,6 +39,7 @@ export interface RestaurantMenu {
     id: number;
     restaurantId: string;
     restaurantName?: string;
+    storeId?: string;
     offersJson?: string;
     categoriesJson?: string;
     fetchedAt: string;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryService } from '../services/inventory';
+import { useStoreFilterStore } from '../store/storeFilterStore';
 import type {
   CreateItemRequest,
   UpdateItemRequest,
@@ -25,9 +26,11 @@ export const inventoryKeys = {
 
 // Items hooks
 export function useItems(query?: ListItemsQuery) {
+  const selectedStoreId = useStoreFilterStore(s => s.selectedStoreId);
+  const effectiveQuery = { ...query, storeId: selectedStoreId ?? undefined };
   return useQuery({
-    queryKey: inventoryKeys.itemsList(query),
-    queryFn: () => inventoryService.getItems(query),
+    queryKey: inventoryKeys.itemsList(effectiveQuery),
+    queryFn: () => inventoryService.getItems(effectiveQuery),
   });
 }
 

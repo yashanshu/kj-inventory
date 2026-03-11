@@ -1,296 +1,320 @@
-// Orders page with table, search, and filters
-
 import { useState, useMemo } from 'react';
-import { Search, Filter, Package, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, RefreshCw, ShoppingBag } from 'lucide-react';
 import { useOrders, useOrderStats } from '../hooks/useOrders';
 import { ordersService, type Order } from '../services/orders';
 
-// Format currency in INR
-const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0,
-    }).format(amount);
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+
+const formatDateTime = (dateString: string) =>
+  new Date(dateString).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+
+const PLATFORM_CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
+  swiggy: { bg: 'rgb(234 88 12 / 0.08)', text: '#c2410c', dot: '#f97316' },
+  zomato: { bg: 'rgb(220 38 38 / 0.08)', text: '#991b1b', dot: '#ef4444' },
 };
 
-// Format date/time in IST
-const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-    });
+const STATUS_CONFIG: Record<string, { cls: string }> = {
+  ordered:   { cls: 'badge-info' },
+  placed:    { cls: 'badge-info' },
+  confirmed: { cls: 'badge-success' },
+  delivered: { cls: 'badge-success' },
+  cancelled: { cls: 'badge-neutral' },
 };
 
-// Platform badge colors
-const platformColors: Record<string, string> = {
-    swiggy: 'bg-orange-100 text-orange-800',
-    zomato: 'bg-red-100 text-red-800',
-};
+function OrderRow({ order }: { order: Order }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const items = useMemo(() => ordersService.parseItems(order.itemsJson), [order.itemsJson]);
+  const platformCfg = PLATFORM_CONFIG[order.platform] || { bg: 'var(--neutral-100)', text: 'var(--neutral-600)', dot: 'var(--neutral-400)' };
+  const statusCls = (STATUS_CONFIG[order.status.toLowerCase()] || STATUS_CONFIG.ordered)?.cls ?? 'badge-neutral';
 
-// Status badge colors
-const statusColors: Record<string, string> = {
-    ordered: 'bg-blue-100 text-blue-800',
-    placed: 'bg-blue-100 text-blue-800',
-    confirmed: 'bg-green-100 text-green-800',
-    delivered: 'bg-green-100 text-green-800',
-    cancelled: 'bg-gray-100 text-gray-600',
-    default: 'bg-gray-100 text-gray-800',
-};
+  return (
+    <>
+      <tr
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{ cursor: 'pointer' }}
+      >
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {isExpanded
+              ? <ChevronUp style={{ width: 14, height: 14, color: 'var(--neutral-400)', flexShrink: 0 }} />
+              : <ChevronDown style={{ width: 14, height: 14, color: 'var(--neutral-400)', flexShrink: 0 }} />}
+            <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.8125rem', color: 'var(--neutral-600)' }}>
+              #{order.externalOrderId.slice(-8)}
+            </span>
+            <span style={{
+              fontSize: '0.6875rem', fontWeight: 600,
+              padding: '0.125rem 0.375rem', borderRadius: 99,
+              background: order.storeId ? 'rgb(34 197 94 / 0.1)' : 'rgb(234 179 8 / 0.1)',
+              color: order.storeId ? '#15803d' : '#a16207',
+            }}>
+              {order.storeId ? 'Bound' : 'Unbound'}
+            </span>
+          </div>
+        </td>
+        <td style={{ color: 'var(--neutral-500)', fontSize: '0.8125rem' }}>
+          {formatDateTime(order.orderDate)}
+        </td>
+        <td>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.3125rem',
+            padding: '0.1875rem 0.625rem', borderRadius: 99,
+            background: platformCfg.bg, color: platformCfg.text,
+            fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: platformCfg.dot }} />
+            {order.platform}
+          </span>
+        </td>
+        <td style={{ fontWeight: 500, color: 'var(--neutral-800)' }}>
+          {order.customerName || <span style={{ color: 'var(--neutral-400)' }}>—</span>}
+        </td>
+        <td style={{ color: 'var(--neutral-500)', fontSize: '0.8125rem' }}>
+          {items.length} item{items.length !== 1 ? 's' : ''}
+        </td>
+        <td style={{ fontWeight: 600, color: 'var(--neutral-900)' }}>
+          {formatCurrency(order.totalAmount)}
+        </td>
+        <td>
+          <span className={`badge ${statusCls}`} style={{ textTransform: 'capitalize' }}>
+            {order.status}
+          </span>
+        </td>
+      </tr>
 
-interface OrderRowProps {
-    order: Order;
-}
-
-function OrderRow({ order }: OrderRowProps) {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const items = useMemo(() => ordersService.parseItems(order.itemsJson), [order.itemsJson]);
-
-    return (
-        <>
-            <tr
-                className="hover:bg-gray-50 cursor-pointer border-b border-gray-200"
-                onClick={() => setIsExpanded(!isExpanded)}
-            >
-                <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                        ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                        )}
-                        <span className="font-mono text-sm text-gray-600">
-                            {order.externalOrderId.slice(-8)}
-                        </span>
+      {isExpanded && items.length > 0 && (
+        <tr>
+          <td colSpan={7} style={{ padding: 0 }}>
+            <div style={{
+              background: 'var(--neutral-50)',
+              borderBottom: '1px solid var(--neutral-100)',
+              padding: '0.875rem 1.25rem 0.875rem 2.75rem',
+            }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--neutral-500)', marginBottom: '0.5rem' }}>
+                Order Items
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3125rem' }}>
+                {items.map((item, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    fontSize: '0.875rem',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                        background: 'var(--neutral-200)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.6875rem', fontWeight: 700, color: 'var(--neutral-600)',
+                      }}>
+                        {item.quantity}
+                      </span>
+                      <span style={{ color: 'var(--neutral-700)' }}>{item.name}</span>
                     </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
-                    {formatDateTime(order.orderDate)}
-                </td>
-                <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${platformColors[order.platform] || 'bg-gray-100'}`}>
-                        {order.platform}
+                    <span style={{ color: 'var(--neutral-500)', fontWeight: 500 }}>
+                      {formatCurrency(item.price)}
                     </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-900">
-                    {order.customerName || '—'}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
-                    {items.length} item{items.length !== 1 ? 's' : ''}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {formatCurrency(order.totalAmount)}
-                </td>
-                <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.status.toLowerCase()] || statusColors.default}`}>
-                        {order.status}
-                    </span>
-                </td>
-            </tr>
-
-            {/* Expanded item details */}
-            {isExpanded && items.length > 0 && (
-                <tr className="bg-gray-50">
-                    <td colSpan={7} className="px-8 py-4">
-                        <div className="text-sm">
-                            <h4 className="font-medium text-gray-700 mb-2">Order Items</h4>
-                            <div className="space-y-1">
-                                {items.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-gray-600">
-                                        <span>{item.quantity}× {item.name}</span>
-                                        <span className="text-gray-500">{formatCurrency(item.price)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            )}
-        </>
-    );
+                  </div>
+                ))}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
 }
 
 export function OrdersPage() {
-    const [platform, setPlatform] = useState<string>('');
-    const [search, setSearch] = useState('');
-    const [limit] = useState(50);
-    const [offset, setOffset] = useState(0);
+  const [platform, setPlatform] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [limit] = useState(50);
+  const [offset, setOffset] = useState(0);
 
-    // Fetch orders
-    const { data: orders = [], isLoading, refetch, isFetching } = useOrders({
-        platform: platform || undefined,
-        limit,
-        offset,
-    });
+  const { data: orders = [], isLoading, refetch, isFetching } = useOrders({
+    platform: platform || undefined,
+    limit,
+    offset,
+  });
+  const { data: stats } = useOrderStats();
 
-    // Fetch stats
-    const { data: stats } = useOrderStats();
-
-    // Client-side search filter (for customer name and order ID)
-    const filteredOrders = useMemo(() => {
-        if (!search.trim()) return orders;
-        const searchLower = search.toLowerCase();
-        return orders.filter(order =>
-            order.customerName?.toLowerCase().includes(searchLower) ||
-            order.externalOrderId.toLowerCase().includes(searchLower)
-        );
-    }, [orders, search]);
-
-    return (
-        <div className="p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-                    <p className="text-sm text-gray-500 mt-1">
-                        View and search orders from Swiggy and Zomato
-                    </p>
-                </div>
-                <button
-                    onClick={() => refetch()}
-                    disabled={isFetching}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                >
-                    <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-                    Refresh
-                </button>
-            </div>
-
-            {/* Stats Cards */}
-            {stats && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                        <div className="text-sm text-gray-500">Total Orders</div>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalOrders}</div>
-                    </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
-                        <div className="text-sm text-gray-500">Total Revenue</div>
-                        <div className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue)}</div>
-                    </div>
-                    <div className="bg-white rounded-lg border border-orange-200 p-4">
-                        <div className="text-sm text-orange-600">Swiggy</div>
-                        <div className="text-xl font-bold text-gray-900">{stats.swiggyOrders} orders</div>
-                        <div className="text-sm text-gray-500">{formatCurrency(stats.swiggyRevenue)}</div>
-                    </div>
-                    <div className="bg-white rounded-lg border border-red-200 p-4">
-                        <div className="text-sm text-red-600">Zomato</div>
-                        <div className="text-xl font-bold text-gray-900">{stats.zomatoOrders} orders</div>
-                        <div className="text-sm text-gray-500">{formatCurrency(stats.zomatoRevenue)}</div>
-                    </div>
-                </div>
-            )}
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-                {/* Search */}
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search by customer name or order ID..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                </div>
-
-                {/* Platform filter */}
-                <div className="relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <select
-                        value={platform}
-                        onChange={(e) => {
-                            setPlatform(e.target.value);
-                            setOffset(0);
-                        }}
-                        className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                    >
-                        <option value="">All Platforms</option>
-                        <option value="swiggy">Swiggy</option>
-                        <option value="zomato">Zomato</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Orders Table */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-gray-500">Loading orders...</div>
-                    </div>
-                ) : filteredOrders.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                        <Package className="w-12 h-12 mb-4 text-gray-300" />
-                        <p>No orders found</p>
-                        {search && <p className="text-sm mt-1">Try adjusting your search</p>}
-                    </div>
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Order ID
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Date
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Platform
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Customer
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Items
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Amount
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {filteredOrders.map((order) => (
-                                        <OrderRow key={order.id} order={order} />
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination */}
-                        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                            <div className="text-sm text-gray-500">
-                                Showing {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setOffset(Math.max(0, offset - limit))}
-                                    disabled={offset === 0}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Previous
-                                </button>
-                                <button
-                                    onClick={() => setOffset(offset + limit)}
-                                    disabled={orders.length < limit}
-                                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return orders;
+    const q = search.toLowerCase();
+    return orders.filter(o =>
+      o.customerName?.toLowerCase().includes(q) ||
+      o.externalOrderId.toLowerCase().includes(q)
     );
+  }, [orders, search]);
+
+  return (
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="text-page-title">Orders</h1>
+          <p style={{ fontSize: '0.875rem', color: 'var(--neutral-500)', marginTop: 4 }}>
+            Swiggy & Zomato orders
+          </p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="btn btn-secondary"
+        >
+          <RefreshCw style={{ width: 14, height: 14 }} className={isFetching ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+          <StatCard label="Total Orders" value={String(stats.totalOrders)} />
+          <StatCard label="Total Revenue" value={formatCurrency(stats.totalRevenue)} />
+          <StatCard
+            label="Swiggy"
+            value={`${stats.swiggyOrders} orders`}
+            sub={formatCurrency(stats.swiggyRevenue)}
+            accent="#f97316"
+            accentBg="rgb(249 115 22 / 0.06)"
+          />
+          <StatCard
+            label="Zomato"
+            value={`${stats.zomatoOrders} orders`}
+            sub={formatCurrency(stats.zomatoRevenue)}
+            accent="#ef4444"
+            accentBg="rgb(239 68 68 / 0.06)"
+          />
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div className="input-icon-wrap" style={{ flex: '1 1 240px' }}>
+          <Search className="input-icon" style={{ width: 15, height: 15 }} />
+          <input
+            type="text"
+            placeholder="Search by customer or order ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="form-input"
+          />
+        </div>
+        <select
+          value={platform}
+          onChange={(e) => { setPlatform(e.target.value); setOffset(0); }}
+          className="form-input"
+          style={{ width: 'auto', minWidth: 160, cursor: 'pointer' }}
+        >
+          <option value="">All Platforms</option>
+          <option value="swiggy">Swiggy</option>
+          <option value="zomato">Zomato</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {isLoading ? (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: '3rem 1rem', gap: '0.75rem',
+          }}>
+            <RefreshCw style={{ width: 20, height: 20, color: 'var(--neutral-400)' }} className="animate-spin" />
+            <span style={{ fontSize: '0.875rem', color: 'var(--neutral-500)' }}>Loading orders…</span>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: '3.5rem 1rem', gap: '0.75rem',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%', background: 'var(--neutral-100)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <ShoppingBag style={{ width: 22, height: 22, color: 'var(--neutral-400)' }} />
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '0.9375rem', fontWeight: 500, color: 'var(--neutral-700)' }}>No orders found</p>
+              {search && <p style={{ fontSize: '0.8125rem', color: 'var(--neutral-400)', marginTop: 4 }}>Try a different search</p>}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Date</th>
+                    <th>Platform</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => (
+                    <OrderRow key={order.id} order={order} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0.75rem 1.25rem',
+              borderTop: '1px solid var(--neutral-100)',
+              background: 'var(--neutral-50)',
+            }}>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)' }}>
+                {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
+              </span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setOffset(Math.max(0, offset - limit))}
+                  disabled={offset === 0}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setOffset(offset + limit)}
+                  disabled={orders.length < limit}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, accent, accentBg }: {
+  label: string; value: string; sub?: string;
+  accent?: string; accentBg?: string;
+}) {
+  return (
+    <div className="metric-card" style={{
+      borderLeft: accent ? `3px solid ${accent}` : undefined,
+      background: accentBg || undefined,
+    }}>
+      <p style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--neutral-500)', letterSpacing: '0.03em', textTransform: 'uppercase', marginBottom: 6 }}>
+        {label}
+      </p>
+      <p style={{ fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--neutral-900)', lineHeight: 1.1 }}>
+        {value}
+      </p>
+      {sub && <p style={{ fontSize: '0.8125rem', color: 'var(--neutral-500)', marginTop: 4 }}>{sub}</p>}
+    </div>
+  );
 }

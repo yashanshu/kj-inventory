@@ -86,18 +86,18 @@ func (s *InventoryService) ListItems(ctx context.Context, orgID uuid.UUID, limit
 }
 
 // ListItemsWithFilters retrieves items with optional filters
-func (s *InventoryService) ListItemsWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
-	return s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, lowStockOnly, limit, offset)
+func (s *InventoryService) ListItemsWithFilters(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) ([]*domain.Item, error) {
+	return s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, storeID, lowStockOnly, limit, offset)
 }
 
 // ListItemsWithFiltersPaginated retrieves items with optional filters and returns total count
-func (s *InventoryService) ListItemsWithFiltersPaginated(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, lowStockOnly bool, limit, offset int) (*domain.PaginatedItemsResponse, error) {
-	items, err := s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, lowStockOnly, limit, offset)
+func (s *InventoryService) ListItemsWithFiltersPaginated(ctx context.Context, orgID uuid.UUID, search string, categoryID *uuid.UUID, storeID *uuid.UUID, lowStockOnly bool, limit, offset int) (*domain.PaginatedItemsResponse, error) {
+	items, err := s.itemRepo.ListWithFilters(ctx, orgID, search, categoryID, storeID, lowStockOnly, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	total, err := s.itemRepo.CountWithFilters(ctx, orgID, search, categoryID, lowStockOnly)
+	total, err := s.itemRepo.CountWithFilters(ctx, orgID, search, categoryID, storeID, lowStockOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +385,7 @@ func (s *InventoryService) ListMovements(ctx context.Context, orgID uuid.UUID, l
 
 // createLowStockAlert creates a low stock alert for an item
 func (s *InventoryService) createLowStockAlert(ctx context.Context, itemID, orgID uuid.UUID, itemName string, currentStock, threshold int) {
+	item, _ := s.itemRepo.GetByID(ctx, itemID)
 	alert := &domain.Alert{
 		OrganizationID: orgID,
 		Type:           domain.AlertTypeLowStock,
@@ -393,6 +394,9 @@ func (s *InventoryService) createLowStockAlert(ctx context.Context, itemID, orgI
 		Message:        fmt.Sprintf("Item '%s' is below minimum threshold. Current stock: %d, Threshold: %d", itemName, currentStock, threshold),
 		ItemID:         &itemID,
 		IsRead:         false,
+	}
+	if item != nil && item.StoreID != uuid.Nil {
+		alert.StoreID = &item.StoreID
 	}
 
 	// Create alert (ignore errors as this is not critical)

@@ -9,6 +9,7 @@ import (
 type Item struct {
 	ID                uuid.UUID `json:"id" db:"id"`
 	OrganizationID    uuid.UUID `json:"organizationId" db:"organization_id"`
+	StoreID           uuid.UUID `json:"storeId" db:"store_id"`
 	CategoryID        uuid.UUID `json:"categoryId" db:"category_id"`
 	Name              string    `json:"name" db:"name" validate:"required,min=1,max=255"`
 	SKU               *string   `json:"sku" db:"sku"`

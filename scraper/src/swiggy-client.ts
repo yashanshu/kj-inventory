@@ -137,7 +137,7 @@ export class SwiggyClient {
         return ist.toISOString().replace(/\.\d{3}Z$/, '');
     }
 
-    async fetchOrders(): Promise<{ orders: SwiggyOrder[]; sessionExpired: boolean }> {
+    async fetchOrders(): Promise<{ orders: SwiggyOrder[]; sessionExpired: boolean; stressedRestaurantIds: number[] }> {
         if (!this.session) {
             throw new Error('Session not loaded');
         }
@@ -145,7 +145,7 @@ export class SwiggyClient {
         const restaurantIds = this.session.restaurantIds;
         if (restaurantIds.length === 0) {
             console.warn('No restaurant IDs in session. Run login again.');
-            return { orders: [], sessionExpired: false };
+            return { orders: [], sessionExpired: false, stressedRestaurantIds: [] };
         }
 
         // Build request payload with last updated times
@@ -180,17 +180,18 @@ export class SwiggyClient {
                 }
 
                 if (failCount >= SwiggyClient.API_FAILURE_THRESHOLD) {
-                    return { orders: [], sessionExpired: true };
+                    return { orders: [], sessionExpired: true, stressedRestaurantIds: [] };
                 }
 
-                return { orders: [], sessionExpired: false };
+                return { orders: [], sessionExpired: false, stressedRestaurantIds: [] };
             }
 
             // Reset failure counter on successful response
             this.consecutiveApiFailures = 0;
 
-            // Collect all new orders
+            // Collect all new orders and stressed restaurants
             const allOrders: SwiggyOrder[] = [];
+            const stressedRestaurantIds: number[] = [];
 
             for (const restaurant of response.data.restaurantData) {
                 // Update last updated time for next poll
@@ -203,17 +204,22 @@ export class SwiggyClient {
                 if (restaurant.popOrders?.length > 0) {
                     allOrders.push(...restaurant.popOrders);
                 }
+
+                // Collect stressed restaurants
+                if (restaurant.stressInfo?.stress === true) {
+                    stressedRestaurantIds.push(restaurant.restaurantId);
+                }
             }
 
             // Save state for persistence across restarts
             await this.saveState();
 
-            return { orders: allOrders, sessionExpired: false };
+            return { orders: allOrders, sessionExpired: false, stressedRestaurantIds };
 
         } catch (error: any) {
             if (error.response?.status === 401 || error.response?.status === 403) {
                 console.error('Session expired! Run: pnpm run login');
-                return { orders: [], sessionExpired: true };
+                return { orders: [], sessionExpired: true, stressedRestaurantIds: [] };
             }
             throw error;
         }

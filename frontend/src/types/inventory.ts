@@ -9,11 +9,13 @@ export type Role = 'ADMIN' | 'MANAGER' | 'USER';
 export interface User {
   id: string;
   organizationId: string;
+  userId: string;
   email: string;
   firstName: string;
   lastName: string;
   role: Role;
   isActive: boolean;
+  defaultStoreId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,11 +98,13 @@ export interface CategoryBreakdown {
 
 // Request/Response types
 export interface LoginRequest {
-  email: string;
+  userId: string;
+  email?: string;
   password: string;
 }
 
 export interface RegisterRequest {
+  userId?: string;
   email: string;
   password: string;
   firstName: string;
@@ -166,6 +170,7 @@ export interface ListItemsQuery {
   lowStock?: boolean;
   limit?: number;
   offset?: number;
+  storeId?: string;
 }
 
 export interface ListMovementsQuery {
@@ -177,4 +182,28 @@ export interface ListMovementsQuery {
 export interface PaginatedItemsResponse {
   items: Item[];
   total: number;
+}
+
+export interface Store {
+  id: string;
+  organizationId: string;
+  name: string;
+  code: string;
+  isPrimary: boolean;
+  isActive: boolean;
+  metadata: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformBinding {
+  id: string;
+  organizationId: string;
+  storeId: string;
+  platform: 'swiggy' | 'zomato';
+  restaurantId: string;
+  restaurantName?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

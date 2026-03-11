@@ -39,6 +39,7 @@ backend/.env
 build/*
 bin/*
 backend/data/*
+.gocache
 
 node_modules
 *.log*
@@ -68,3 +69,6 @@ frontend/playwright/.cache/
 deployment-key
 deployment-key.pub
 server-setup-output.txt
+
+## temp
+mobile/*

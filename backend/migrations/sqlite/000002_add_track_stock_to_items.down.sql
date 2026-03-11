@@ -1,2 +1,1 @@
--- SQLite does not support dropping columns without table recreation.
--- This migration is intentionally left as a no-op.
+-- No-op: 000002_add_track_stock_to_items.up.sql is intentionally empty.

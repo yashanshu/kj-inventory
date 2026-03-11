@@ -1,5 +1,6 @@
--- Rollback external orders table
-DROP INDEX IF EXISTS idx_external_orders_platform_date;
-DROP INDEX IF EXISTS idx_external_orders_date;
-DROP INDEX IF EXISTS idx_external_orders_platform;
+DROP TRIGGER IF EXISTS update_external_orders_updated_at;
+DROP TRIGGER IF EXISTS update_platform_store_bindings_updated_at;
+
+DROP TABLE IF EXISTS external_order_items;
 DROP TABLE IF EXISTS external_orders;
+DROP TABLE IF EXISTS platform_store_bindings;

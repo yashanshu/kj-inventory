@@ -169,7 +169,7 @@ func (s *DashboardService) GetCategoryBreakdown(ctx context.Context, orgID uuid.
 // GetLowStockItems retrieves items below their minimum threshold
 func (s *DashboardService) GetLowStockItems(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.Item, error) {
 	query := `
-		SELECT id, organization_id, category_id, name, sku, unit_of_measurement,
+		SELECT id, organization_id, store_id, category_id, name, sku, unit_of_measurement,
 		       minimum_threshold, current_stock, unit_cost, is_active, track_stock, created_at, updated_at
 		FROM items
 		WHERE organization_id = ?
@@ -190,9 +190,9 @@ func (s *DashboardService) GetLowStockItems(ctx context.Context, orgID uuid.UUID
 	var items []*domain.Item
 	for rows.Next() {
 		var item domain.Item
-		var idStr, orgIDStr, catIDStr string
+		var idStr, orgIDStr, storeIDStr, catIDStr string
 		if err := rows.Scan(
-			&idStr, &orgIDStr, &catIDStr, &item.Name, &item.SKU, &item.UnitOfMeasurement,
+			&idStr, &orgIDStr, &storeIDStr, &catIDStr, &item.Name, &item.SKU, &item.UnitOfMeasurement,
 			&item.MinimumThreshold, &item.CurrentStock, &item.UnitCost, &item.IsActive,
 			&item.TrackStock, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
@@ -200,6 +200,7 @@ func (s *DashboardService) GetLowStockItems(ctx context.Context, orgID uuid.UUID
 		}
 		item.ID, _ = uuid.Parse(idStr)
 		item.OrganizationID, _ = uuid.Parse(orgIDStr)
+		item.StoreID, _ = uuid.Parse(storeIDStr)
 		item.CategoryID, _ = uuid.Parse(catIDStr)
 		items = append(items, &item)
 	}

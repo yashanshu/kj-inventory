@@ -1,10 +1,10 @@
-// Main layout component with navigation
-
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, LayoutDashboard, LogOut, Menu, X, ShoppingCart, UtensilsCrossed } from 'lucide-react';
+import { Package, LayoutDashboard, LogOut, Menu, X, ShoppingCart, UtensilsCrossed, Store, Link2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useStores } from '../hooks/useStores';
+import { useStoreFilterStore } from '../store/storeFilterStore';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +14,8 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: stores = [] } = useStores();
+  const { selectedStoreId, setSelectedStoreId } = useStoreFilterStore();
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -27,104 +29,230 @@ export function Layout({ children }: LayoutProps) {
     window.location.href = '/login';
   };
 
+  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar backdrop */}
+    <div style={{ minHeight: '100vh', background: 'var(--neutral-50)', display: 'flex' }}>
+      {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgb(0 0 0 / 0.5)',
+            zIndex: 40, backdropFilter: 'blur(2px)',
+          }}
+          className="lg:hidden"
         />
       )}
 
       {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+      <aside
+        className={`sidebar fixed inset-y-0 left-0 z-50 w-60 flex flex-col lg:translate-x-0 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ width: 232 }}
       >
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b">
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">KJ Inventory</span>
+        {/* Logo */}
+        <div style={{
+          padding: '1.25rem 1.25rem 0.875rem',
+          borderBottom: '1px solid rgb(255 255 255 / 0.06)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <div style={{
+              width: 32, height: 32,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              borderRadius: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Package style={{ width: 16, height: 16, color: '#fff' }} />
             </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>KJ Inventory</div>
+              <div style={{ fontSize: '0.6875rem', color: '#64748b', lineHeight: 1 }}>Restaurant Ops</div>
+            </div>
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden"
+            style={{ color: '#64748b', padding: 4, cursor: 'pointer', background: 'none', border: 'none' }}
+          >
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+        {/* Nav section label */}
+        <div style={{ padding: '1.25rem 1.25rem 0.5rem' }}>
+          <span style={{ fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#475569' }}>
+            Main Menu
+          </span>
+        </div>
 
-          {/* User section */}
-          <div className="p-4 border-t">
-            <div className="flex items-center space-x-3 px-4 py-3 mb-2">
-              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                <span className="text-gray-600 font-medium">
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+        {/* Store picker */}
+        {stores.length > 1 && (
+          <div style={{ padding: '0 0.75rem 0.75rem' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              background: 'rgb(255 255 255 / 0.04)',
+              borderRadius: 8,
+              border: '1px solid rgb(255 255 255 / 0.08)',
+            }}>
+              <Store style={{ width: 13, height: 13, color: '#64748b', flexShrink: 0 }} />
+              <select
+                value={selectedStoreId ?? ''}
+                onChange={(e) => setSelectedStoreId(e.target.value || null)}
+                style={{
+                  flex: 1, background: 'none', border: 'none', outline: 'none',
+                  color: '#94a3b8', fontSize: '0.8125rem', cursor: 'pointer',
+                }}
+              >
+                <option value="">All Stores</option>
+                {stores.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav style={{ flex: 1, padding: '0 0.75rem', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {navigation.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={`sidebar-nav-item${isActive ? ' active' : ''}`}
+              >
+                <item.icon className="nav-icon" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span>{item.name}</span>
+                {isActive && (
+                  <span style={{
+                    marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%',
+                    background: '#818cf8', flexShrink: 0,
+                  }} />
+                )}
+              </Link>
+            );
+          })}
+
+          {user?.role === 'ADMIN' && (
+            <>
+              <div style={{ padding: '0.75rem 0.75rem 0.25rem' }}>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#475569' }}>
+                  Admin
                 </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              {[
+                { name: 'Stores', href: '/admin/stores', icon: Store },
+                { name: 'Bindings', href: '/admin/bindings', icon: Link2 },
+              ].map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`sidebar-nav-item${isActive ? ' active' : ''}`}
+                  >
+                    <item.icon className="nav-icon" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                    <span>{item.name}</span>
+                    {isActive && (
+                      <span style={{
+                        marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%',
+                        background: '#818cf8', flexShrink: 0,
+                      }} />
+                    )}
+                  </Link>
+                );
+              })}
+            </>
+          )}
+        </nav>
+
+        {/* User section */}
+        <div style={{
+          padding: '0.75rem',
+          borderTop: '1px solid rgb(255 255 255 / 0.06)',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.625rem',
+            padding: '0.625rem 0.75rem',
+            borderRadius: 10,
+            marginBottom: 4,
+            background: 'rgb(255 255 255 / 0.04)',
+          }}>
+            <div className="avatar" style={{ width: 30, height: 30, fontSize: '0.6875rem' }}>
+              {initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.firstName} {user?.lastName}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.role?.toLowerCase()}
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-3 px-4 py-3 w-full text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Logout</span>
-            </button>
           </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.625rem',
+              padding: '0.5rem 0.75rem',
+              width: '100%',
+              borderRadius: 8,
+              background: 'none', border: 'none',
+              fontSize: '0.8125rem', fontWeight: 500, color: '#64748b',
+              cursor: 'pointer',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgb(255 255 255 / 0.06)'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; }}
+          >
+            <LogOut style={{ width: 14, height: 14 }} />
+            <span>Sign out</span>
+          </button>
         </div>
-      </div>
+      </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top bar (mobile) */}
-        <div className="sticky top-0 z-30 lg:hidden bg-white shadow-sm">
-          <div className="flex items-center justify-between px-4 py-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <span className="text-lg font-semibold text-gray-900">KJ Inventory</span>
-            <div className="w-6" />
+      <div style={{ flex: 1, marginLeft: 0 }} className="lg:ml-[232px]">
+        {/* Mobile top bar */}
+        <div
+          className="lg:hidden"
+          style={{
+            position: 'sticky', top: 0, zIndex: 30,
+            background: 'var(--neutral-0)',
+            borderBottom: '1px solid var(--neutral-200)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0.75rem 1rem',
+          }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            style={{ background: 'none', border: 'none', color: 'var(--neutral-600)', cursor: 'pointer', padding: 4 }}
+          >
+            <Menu style={{ width: 20, height: 20 }} />
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{
+              width: 24, height: 24,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Package style={{ width: 12, height: 12, color: '#fff' }} />
+            </div>
+            <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--neutral-900)' }}>KJ Inventory</span>
           </div>
+          <div style={{ width: 28 }} />
         </div>
 
         {/* Page content */}
-        <main className="p-6">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <main style={{ padding: '2rem 1.75rem', maxWidth: 1200, margin: '0 auto' }}>
+          {children}
         </main>
       </div>
     </div>

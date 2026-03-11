@@ -40,6 +40,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,
 		organization_id TEXT NOT NULL,
+		default_store_id TEXT,
+		user_id TEXT UNIQUE NOT NULL,
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
 		first_name TEXT NOT NULL,
@@ -112,6 +114,9 @@ func TestAuthHandler_Register(t *testing.T) {
 				if user["email"] != "test@example.com" {
 					t.Errorf("expected email test@example.com, got %v", user["email"])
 				}
+				if user["userId"] != "test" {
+					t.Errorf("expected userId test, got %v", user["userId"])
+				}
 				if user["firstName"] != "John" {
 					t.Errorf("expected firstName John, got %v", user["firstName"])
 				}
@@ -131,6 +136,19 @@ func TestAuthHandler_Register(t *testing.T) {
 			},
 			expectedStatus: http.StatusConflict,
 			expectedError:  "EMAIL_EXISTS",
+		},
+		{
+			name: "duplicate user id",
+			requestBody: handlers.RegisterRequest{
+				UserID:         "duplicate",
+				Email:          "newduplicate@example.com",
+				Password:       "password123",
+				FirstName:      "Jane",
+				LastName:       "Smith",
+				OrganizationID: orgID.String(),
+			},
+			expectedStatus: http.StatusConflict,
+			expectedError:  "USER_ID_EXISTS",
 		},
 		{
 			name: "invalid organization ID",
@@ -155,8 +173,9 @@ func TestAuthHandler_Register(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// For the duplicate email test, create a user first
-			if tt.name == "duplicate email" {
+			if tt.name == "duplicate email" || tt.name == "duplicate user id" {
 				user := &domain.User{
+					UserID:         "duplicate",
 					Email:          "duplicate@example.com",
 					FirstName:      "Existing",
 					LastName:       "User",
@@ -234,6 +253,7 @@ func TestAuthHandler_Login(t *testing.T) {
 	authService := services.NewAuthService(userRepo, "test-secret-key")
 
 	user := &domain.User{
+		UserID:         "login",
 		Email:          "login@example.com",
 		FirstName:      "Login",
 		LastName:       "User",
@@ -248,36 +268,56 @@ func TestAuthHandler_Login(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		userID         string
 		email          string
 		password       string
 		expectedStatus int
 		expectedError  string
 	}{
 		{
-			name:           "successful login",
+			name:           "successful login with user id",
+			userID:         "login",
+			password:       "password123",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "successful login with mixed case user id",
+			userID:         "LoGiN",
+			password:       "password123",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "successful login with full email",
 			email:          "login@example.com",
 			password:       "password123",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "invalid email",
-			email:          "wrong@example.com",
+			name:           "invalid user id",
+			userID:         "wrong",
 			password:       "password123",
 			expectedStatus: http.StatusUnauthorized,
 			expectedError:  "INVALID_CREDENTIALS",
 		},
 		{
 			name:           "invalid password",
-			email:          "login@example.com",
+			userID:         "login",
 			password:       "wrongpassword",
 			expectedStatus: http.StatusUnauthorized,
 			expectedError:  "INVALID_CREDENTIALS",
+		},
+		{
+			name:           "missing identifier",
+			password:       "password123",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "INVALID_REQUEST",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reqBody := handlers.LoginRequest{
+				UserID:   tt.userID,
 				Email:    tt.email,
 				Password: tt.password,
 			}

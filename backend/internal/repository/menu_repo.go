@@ -18,9 +18,15 @@ func NewMenuRepository(db *sql.DB) *MenuRepository {
 func (r *MenuRepository) Upsert(m *domain.RestaurantMenu) error {
 	query := `
 		INSERT INTO restaurant_menus (
+			organization_id, store_id, platform_binding_id, platform,
 			restaurant_id, restaurant_name, offers_json, categories_json, fetched_at
-		) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(restaurant_id) DO UPDATE SET
+		) VALUES (
+			(SELECT organization_id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			(SELECT store_id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			(SELECT id FROM platform_store_bindings WHERE platform = ? AND restaurant_id = ? LIMIT 1),
+			?, ?, ?, ?, ?, ?
+		)
+		ON CONFLICT(platform, restaurant_id) DO UPDATE SET
 			restaurant_name = excluded.restaurant_name,
 			offers_json = excluded.offers_json,
 			categories_json = excluded.categories_json,
@@ -28,6 +34,10 @@ func (r *MenuRepository) Upsert(m *domain.RestaurantMenu) error {
 	`
 
 	result, err := r.db.Exec(query,
+		m.Platform, m.RestaurantID,
+		m.Platform, m.RestaurantID,
+		m.Platform, m.RestaurantID,
+		m.Platform,
 		m.RestaurantID,
 		m.RestaurantName,
 		m.OffersJSON,
@@ -52,12 +62,12 @@ func (r *MenuRepository) Upsert(m *domain.RestaurantMenu) error {
 func (r *MenuRepository) GetByRestaurantID(restaurantID string) (*domain.RestaurantMenu, error) {
 	var m domain.RestaurantMenu
 	query := `
-		SELECT id, restaurant_id, restaurant_name, offers_json, categories_json, fetched_at, created_at
+		SELECT id, platform, restaurant_id, restaurant_name, offers_json, categories_json, fetched_at, created_at
 		FROM restaurant_menus
-		WHERE restaurant_id = ?
+		WHERE platform = ? AND restaurant_id = ?
 	`
-	row := r.db.QueryRow(query, restaurantID)
-	err := row.Scan(&m.ID, &m.RestaurantID, &m.RestaurantName, &m.OffersJSON, &m.CategoriesJSON, &m.FetchedAt, &m.CreatedAt)
+	row := r.db.QueryRow(query, "swiggy", restaurantID)
+	err := row.Scan(&m.ID, &m.Platform, &m.RestaurantID, &m.RestaurantName, &m.OffersJSON, &m.CategoriesJSON, &m.FetchedAt, &m.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -70,9 +80,9 @@ func (r *MenuRepository) GetByRestaurantID(restaurantID string) (*domain.Restaur
 // ListAll returns all stored restaurant menus
 func (r *MenuRepository) ListAll() ([]domain.RestaurantMenu, error) {
 	query := `
-		SELECT id, restaurant_id, restaurant_name, offers_json, categories_json, fetched_at, created_at
+		SELECT id, store_id, platform, restaurant_id, restaurant_name, offers_json, categories_json, fetched_at, created_at
 		FROM restaurant_menus
-		ORDER BY restaurant_name
+		ORDER BY platform, restaurant_name
 	`
 
 	rows, err := r.db.Query(query)
@@ -84,7 +94,7 @@ func (r *MenuRepository) ListAll() ([]domain.RestaurantMenu, error) {
 	var menus []domain.RestaurantMenu
 	for rows.Next() {
 		var m domain.RestaurantMenu
-		err := rows.Scan(&m.ID, &m.RestaurantID, &m.RestaurantName, &m.OffersJSON, &m.CategoriesJSON, &m.FetchedAt, &m.CreatedAt)
+		err := rows.Scan(&m.ID, &m.StoreID, &m.Platform, &m.RestaurantID, &m.RestaurantName, &m.OffersJSON, &m.CategoriesJSON, &m.FetchedAt, &m.CreatedAt)
 		if err != nil {
 			return nil, err
 		}

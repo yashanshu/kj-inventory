@@ -34,6 +34,9 @@ func (h *MenuHandler) UpsertMenu(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "restaurantId is required", http.StatusBadRequest)
 		return
 	}
+	if req.Platform == "" {
+		req.Platform = "swiggy"
+	}
 
 	fetchedAt := time.Now()
 	if req.FetchedAt != "" {
@@ -43,6 +46,7 @@ func (h *MenuHandler) UpsertMenu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := &domain.RestaurantMenu{
+		Platform:       req.Platform,
 		RestaurantID:   req.RestaurantID,
 		RestaurantName: req.RestaurantName,
 		OffersJSON:     req.OffersJSON,

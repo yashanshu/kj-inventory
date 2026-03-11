@@ -25,8 +25,9 @@ func NewAuthHandler(authService *services.AuthService, log *logger.Logger) *Auth
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required"`
+	UserID   string `json:"userId"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type LoginResponse struct {
@@ -35,6 +36,7 @@ type LoginResponse struct {
 }
 
 type RegisterRequest struct {
+	UserID         string `json:"userId,omitempty"`
 	Email          string `json:"email" validate:"required,email"`
 	Password       string `json:"password" validate:"required,min=8"`
 	FirstName      string `json:"firstName" validate:"required"`
@@ -55,10 +57,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, user, err := h.authService.Login(r.Context(), req.Email, req.Password)
+	identifier := req.UserID
+	if identifier == "" {
+		identifier = req.Email
+	}
+	if identifier == "" || req.Password == "" {
+		utils.RespondError(w, http.StatusBadRequest, "INVALID_REQUEST", "userId or email, and password are required", nil)
+		return
+	}
+
+	token, user, err := h.authService.Login(r.Context(), identifier, req.Password)
 	if err != nil {
 		if err == services.ErrInvalidCredentials {
-			utils.RespondError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password", nil)
+			utils.RespondError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid user ID or password", nil)
 			return
 		}
 		if err == services.ErrUserInactive {
@@ -92,6 +103,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &domain.User{
+		UserID:         req.UserID,
 		Email:          req.Email,
 		FirstName:      req.FirstName,
 		LastName:       req.LastName,
@@ -102,6 +114,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == services.ErrEmailExists {
 			utils.RespondError(w, http.StatusConflict, "EMAIL_EXISTS", "Email already exists", nil)
+			return
+		}
+		if err == services.ErrUserIDExists {
+			utils.RespondError(w, http.StatusConflict, "USER_ID_EXISTS", "User ID already exists or is invalid", nil)
 			return
 		}
 		h.log.Error("Failed to register", err)

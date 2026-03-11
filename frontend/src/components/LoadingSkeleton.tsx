@@ -1,25 +1,31 @@
-// Reusable loading skeleton components
+const shimmer = {
+  background: 'var(--neutral-200)',
+  borderRadius: 6,
+} as const;
 
 export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table">
+          <thead>
             <tr>
               {[...Array(6)].map((_, i) => (
-                <th key={i} className="px-6 py-3">
-                  <div className="h-4 bg-gray-200 rounded animate-pulse-slow"></div>
+                <th key={i}>
+                  <div style={{ ...shimmer, height: 12, width: '60%' }} className="animate-pulse-slow" />
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody>
             {[...Array(rows)].map((_, rowIndex) => (
               <tr key={rowIndex}>
                 {[...Array(6)].map((_, colIndex) => (
-                  <td key={colIndex} className="px-6 py-4 whitespace-nowrap">
-                    <div className="h-4 bg-gray-200 rounded animate-pulse-slow" style={{ animationDelay: `${colIndex * 100}ms` }}></div>
+                  <td key={colIndex}>
+                    <div
+                      style={{ ...shimmer, height: 14, width: colIndex === 0 ? '70%' : '50%' }}
+                      className="animate-pulse-slow"
+                    />
                   </td>
                 ))}
               </tr>
@@ -33,13 +39,13 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
 
 export function MetricCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="h-4 bg-gray-200 rounded w-24 mb-3 animate-pulse-slow"></div>
-          <div className="h-8 bg-gray-200 rounded w-20 animate-pulse-slow"></div>
+    <div className="metric-card">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ ...shimmer, height: 11, width: 80, marginBottom: 12 }} className="animate-pulse-slow" />
+          <div style={{ ...shimmer, height: 28, width: 64 }} className="animate-pulse-slow" />
         </div>
-        <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse-slow"></div>
+        <div style={{ ...shimmer, width: 40, height: 40, borderRadius: 10 }} className="animate-pulse-slow" />
       </div>
     </div>
   );
@@ -47,14 +53,14 @@ export function MetricCardSkeleton() {
 
 export function ListSkeleton({ items = 5 }: { items?: number }) {
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', padding: '0.5rem 0' }}>
       {[...Array(items)].map((_, i) => (
-        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-          <div className="flex-1">
-            <div className="h-4 bg-gray-200 rounded w-32 mb-2 animate-pulse-slow"></div>
-            <div className="h-3 bg-gray-200 rounded w-20 animate-pulse-slow"></div>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ ...shimmer, height: 13, width: `${48 + (i % 3) * 16}%`, marginBottom: 6 }} className="animate-pulse-slow" />
+            <div style={{ ...shimmer, height: 10, width: '35%' }} className="animate-pulse-slow" />
           </div>
-          <div className="h-6 bg-gray-200 rounded w-16 animate-pulse-slow"></div>
+          <div style={{ ...shimmer, height: 22, width: 52, borderRadius: 99 }} className="animate-pulse-slow" />
         </div>
       ))}
     </div>
@@ -63,9 +69,13 @@ export function ListSkeleton({ items = 5 }: { items?: number }) {
 
 export function CategoryPillsSkeleton() {
   return (
-    <div className="flex space-x-2 overflow-x-auto pb-2">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="flex-shrink-0 h-10 w-24 bg-gray-200 rounded-full animate-pulse-slow" style={{ animationDelay: `${i * 100}ms` }}></div>
+    <div style={{ display: 'flex', gap: '0.375rem', overflow: 'hidden' }}>
+      {[80, 64, 96, 72, 56].map((w, i) => (
+        <div
+          key={i}
+          style={{ ...shimmer, height: 28, width: w, borderRadius: 99, flexShrink: 0 }}
+          className="animate-pulse-slow"
+        />
       ))}
     </div>
   );

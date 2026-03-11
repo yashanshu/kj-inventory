@@ -148,9 +148,58 @@ async function main(): Promise<void> {
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let pollInProgress = false;
 
-    // Prep-time overdue tracking
-    // Maps orderId -> { dueAt: timestamp, notification: OrderNotification, fired: boolean }
-    const prepTimerMap = new Map<string, { dueAt: number; notification: any; fired: boolean }>();
+    // Fibonacci escalation offsets in minutes after prep deadline: 0, 3, 5, 8, 13, 21, 34...
+    function fibSequence(count: number): number[] {
+        const seq = [0, 3];
+        while (seq.length < count) {
+            seq.push(seq[seq.length - 1] + seq[seq.length - 2]);
+        }
+        return seq.slice(0, count);
+    }
+    const FIB_OFFSETS = fibSequence(10); // [0, 3, 5, 8, 13, 21, 34, 55, 89, 144]
+
+    interface PrepEntry {
+        dueAt: number;          // Unix ms when prep time expires
+        notification: any;
+        orderNumber: number;
+        nextAlertIndex: number; // index into FIB_OFFSETS
+        alertsFired: number;
+        wasOverdue: boolean;    // has at least one alert fired
+    }
+
+    // Maps orderId -> prep tracking entry
+    const prepTimerMap = new Map<string, PrepEntry>();
+
+    // Tracks which restaurants are currently stressed (to detect transitions)
+    const stressedRestaurants = new Set<number>();
+
+    // Daily overdue log for 7am report — resets at midnight IST
+    interface OverdueLogEntry {
+        orderId: string;
+        last4: string;
+        platform: string;
+        itemSummary: string;
+        resolvedOverrunMinutes: number | null; // set when order marked ready
+    }
+    let overdueLog: OverdueLogEntry[] = [];
+    let overdueLogDate = getISTDateString();
+
+    // Daily MFR (prep accuracy) counters — resets at midnight IST
+    let mfrLog = { hits: 0, misses: 0 };
+    let mfrLogDate = getISTDateString();
+
+    // Daily promo efficiency stats — resets at midnight IST
+    interface PromoStat {
+        orders: number;
+        totalBill: number;   // sum of orderValue
+        totalNet: number;    // sum of netEarnings
+        itemBurn: number;    // sum of restaurant_discount_hit per item (% offers only)
+        // Per-order snapshots of what was accumulated, keyed by orderId.
+        // Used by cancellation reversal to undo exactly what was added.
+        contributions: Map<string, { bill: number; net: number; burn: number }>;
+    }
+    let promoStats = new Map<string, PromoStat>();
+    let promoStatsDate = getISTDateString();
 
     async function poll(): Promise<void> {
         // Check if restaurant is open
@@ -164,7 +213,23 @@ async function main(): Promise<void> {
         }
 
         try {
-            const { orders, sessionExpired } = await swiggy.fetchOrders();
+            const { orders, sessionExpired, stressedRestaurantIds } = await swiggy.fetchOrders();
+
+            // Detect new stress onsets (false→true transitions only)
+            for (const rid of stressedRestaurantIds) {
+                if (!stressedRestaurants.has(rid)) {
+                    stressedRestaurants.add(rid);
+                    const restaurantName = config.restaurantMap[String(rid)] || `Restaurant ${rid}`;
+                    console.log(`\n   Kitchen stress detected for ${restaurantName} (${rid})`);
+                    await notifier.notifyKitchenStress(restaurantName);
+                }
+            }
+            // Clear stress for restaurants no longer flagged
+            for (const rid of stressedRestaurants) {
+                if (!stressedRestaurantIds.includes(rid)) {
+                    stressedRestaurants.delete(rid);
+                }
+            }
 
             if (sessionExpired) {
                 consecutiveErrors++;
@@ -210,12 +275,16 @@ async function main(): Promise<void> {
 
                 // Financials extraction
                 // bill = Order Value (item totals + packing)
-                let orderValue = order.bill || 0;
-                if (!orderValue && order.bill && typeof order.bill === 'object') {
+                let orderValue: number;
+                if (typeof order.bill === 'number' && order.bill > 0) {
+                    orderValue = order.bill;
+                } else if (order.bill && typeof order.bill === 'object') {
                     orderValue = order.bill.total || 0;
+                } else {
+                    orderValue = 0;
                 }
                 // Fallback: sum from items MRP
-                if (!orderValue || orderValue === 0) {
+                if (orderValue === 0) {
                     orderValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
                 }
 
@@ -239,6 +308,15 @@ async function main(): Promise<void> {
                 const customerName = order.customer?.customer_name || order.customerName || 'Unknown';
                 const customerArea = order.customer_area || order.customer?.area || '';
                 const specialInstructions = order.customer?.special_instructions?.si_cx_instruction?.trim() || undefined;
+                const customerDistance: number = parseFloat(order.customer_distance) || 0;
+
+                // Item complexity: total addon + variant count across all items
+                const rawItems = order.items || order.order_items || order.cart?.items || [];
+                const itemComplexity: number = rawItems.reduce((sum: number, item: any) => {
+                    const addons = item.newAddons?.length || item.addons?.length || 0;
+                    const variants = item.newVariants?.length || 0;
+                    return sum + addons + variants;
+                }, 0);
 
                 // Use placed_time for when order was actually placed
                 const orderDate = order.status?.placed_time || order.status?.ordered_time || order.ordered_time || order.orderDate || new Date().toISOString();
@@ -266,40 +344,144 @@ async function main(): Promise<void> {
                     platform: 'swiggy' as const,
                     status: currentStatus,
                     orderDate,
-                    prepTime
+                    prepTime,
+                    customerDistance,
+                    itemComplexity
                 };
 
                 // Notify for new orders and cancellations
                 const notifyStatuses = ['ordered', 'placed'];
                 const cancelStatuses = ['cancelled', 'canceled'];
 
+                // Item-level discount burn (only non-zero for % offers)
+                const itemBurnTotal: number = (order.items || order.order_items || order.cart?.items || [])
+                    .reduce((s: number, item: any) => s + (parseFloat(item.restaurant_discount_hit) || 0), 0);
+
                 if (notifyStatuses.includes(currentStatus.toLowerCase())) {
                     const orderNumber = getNextOrderNumber();
                     await notifier.notifyNewOrder(orderNotification, orderNumber);
+
+                    // Accumulate promo efficiency stats
+                    if (orderNotification.offerDescription) {
+                        const today = getISTDateString();
+                        if (today !== promoStatsDate) { promoStats = new Map(); promoStatsDate = today; }
+                        const key = orderNotification.offerDescription;
+                        const existing = promoStats.get(key) ?? { orders: 0, totalBill: 0, totalNet: 0, itemBurn: 0, contributions: new Map() };
+                        const contrib = { bill: orderNotification.orderValue, net: orderNotification.netEarnings, burn: itemBurnTotal };
+                        existing.contributions.set(orderId, contrib);
+                        promoStats.set(key, {
+                            orders: existing.orders + 1,
+                            totalBill: existing.totalBill + contrib.bill,
+                            totalNet: existing.totalNet + contrib.net,
+                            itemBurn: existing.itemBurn + contrib.burn,
+                            contributions: existing.contributions,
+                        });
+                    }
 
                     // Register prep-time overdue tracker if prepTime is set
                     if (orderNotification.prepTime && orderNotification.prepTime > 0) {
                         prepTimerMap.set(orderId, {
                             dueAt: Date.now() + orderNotification.prepTime * 60 * 1000,
                             notification: orderNotification,
-                            fired: false,
+                            orderNumber,
+                            nextAlertIndex: 0,
+                            alertsFired: 0,
+                            wasOverdue: false,
                         });
                     }
                 } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
                     await notifier.notifyCancelledOrder(orderNotification);
                     prepTimerMap.delete(orderId); // No longer relevant
+
+                    // Reverse promo stat if this order was previously counted
+                    if (orderNotification.offerDescription) {
+                        const key = orderNotification.offerDescription;
+                        const existing = promoStats.get(key);
+                        const contrib = existing?.contributions.get(orderId);
+                        if (existing && contrib) {
+                            existing.contributions.delete(orderId);
+                            const updated = {
+                                orders: existing.orders - 1,
+                                totalBill: existing.totalBill - contrib.bill,
+                                totalNet: existing.totalNet - contrib.net,
+                                itemBurn: existing.itemBurn - contrib.burn,
+                                contributions: existing.contributions,
+                            };
+                            if (updated.orders <= 0) {
+                                promoStats.delete(key);
+                            } else {
+                                promoStats.set(key, updated);
+                            }
+                        }
+                    }
                 } else {
                     // Clear prep timer if order reached a terminal/ready state
                     const terminalStatuses = ['delivered', 'ready', 'picked_up', 'pickedup', 'dispatched'];
                     if (terminalStatuses.includes(currentStatus.toLowerCase())) {
+                        const entry = prepTimerMap.get(orderId);
+                        if (entry && entry.wasOverdue) {
+                            const overrunMs = Date.now() - entry.dueAt;
+                            const overrunMin = Math.max(1, Math.round(overrunMs / 60000));
+                            await notifier.notifyOrderReady(entry.notification, entry.orderNumber, overrunMin);
+                            // Record in daily overdue log
+                            const today = getISTDateString();
+                            if (today !== overdueLogDate) { overdueLog = []; overdueLogDate = today; }
+                            const existing = overdueLog.find(e => e.orderId === orderId);
+                            if (existing) {
+                                existing.resolvedOverrunMinutes = overrunMin;
+                            } else {
+                                overdueLog.push({
+                                    orderId,
+                                    last4: orderId.slice(-4),
+                                    platform: orderNotification.platform.toUpperCase(),
+                                    itemSummary: orderNotification.items.map(i => `${i.quantity}x ${i.name}`).join(', '),
+                                    resolvedOverrunMinutes: overrunMin,
+                                });
+                            }
+                        }
                         prepTimerMap.delete(orderId);
+
+                        // MFR accuracy tracking (only meaningful on delivered)
+                        if (currentStatus.toLowerCase() === 'delivered') {
+                            const today = getISTDateString();
+                            if (today !== mfrLogDate) { mfrLog = { hits: 0, misses: 0 }; mfrLogDate = today; }
+
+                            if (order.isMFRAccurate === true) {
+                                mfrLog.hits++;
+                            } else if (order.isMFRAccurate === false) {
+                                mfrLog.misses++;
+                                await notifier.notifyMFRMiss(orderNotification);
+                            }
+
+                            // Handover delay — DE waited at door
+                            if (order.status?.hand_over_delayed === true) {
+                                const arrivedMs = order.status.arrived_time
+                                    ? new Date(order.status.arrived_time + '+05:30').getTime()
+                                    : null;
+                                const pickedupMs = order.status.pickedup_time
+                                    ? new Date(order.status.pickedup_time + '+05:30').getTime()
+                                    : null;
+                                const deWaitMin = arrivedMs && pickedupMs
+                                    ? Math.round((pickedupMs - arrivedMs) / 60000)
+                                    : 0;
+                                await notifier.notifyHandoverDelay(orderNotification, deWaitMin);
+                            }
+                        }
                     }
+
+                    // Complaint outlier check (any status where flag is set)
+                    if (order.outlier_meta?.has_complaint_outliers === true) {
+                        await notifier.notifyComplaintOutlier(orderNotification);
+                    }
+
                     console.log(`   Skipping notification for status: ${currentStatus}`);
                 }
 
                 // Send to KJ Inventory (Ingest ALL statuses)
                 await kjApi.ingestOrder({
                     platform: 'swiggy',
+                    restaurantId: String(orderNotification.restaurantId || ''),
+                    restaurantName: orderNotification.restaurantName,
                     externalOrderId: orderId,
                     orderDate,
                     customerName,
@@ -358,7 +540,7 @@ async function main(): Promise<void> {
         const metrics = await swiggy.getBusinessMetrics(yesterdayMidnightUTC, yesterdayEndUTC);
 
         if (metrics) {
-            await notifier.sendDailySummary(metrics);
+            await notifier.sendDailySummary(metrics, overdueLog, mfrLog, promoStats as Map<string, { orders: number; totalBill: number; totalNet: number; itemBurn: number }>);
             swiggy.lastSummaryDate = todayStr;
         }
     }
@@ -379,6 +561,7 @@ async function main(): Promise<void> {
             const menuData = await swiggy.fetchMenu(rid, config.menuRestaurantLat, config.menuRestaurantLng);
             if (menuData) {
                 await kjApi.upsertMenu({
+                    platform: 'swiggy',
                     restaurantId: ridStr,
                     restaurantName: menuData.restaurantName,
                     offersJson: JSON.stringify(menuData.offers),
@@ -411,18 +594,68 @@ async function main(): Promise<void> {
 
     async function checkPrepTimeOverdue(): Promise<void> {
         const now = Date.now();
+        const today = getISTDateString();
+        if (today !== overdueLogDate) { overdueLog = []; overdueLogDate = today; }
+
         for (const [orderId, entry] of prepTimerMap) {
-            if (!entry.fired && now >= entry.dueAt) {
-                entry.fired = true;
-                console.log(`\n   Prep time overdue for order ${orderId}`);
-                await notifier.notifyPrepTimeOverdue(entry.notification);
+            if (now < entry.dueAt) continue; // Not yet overdue
+
+            // All Fibonacci alerts exhausted — stop firing, prune after 3h
+            if (entry.nextAlertIndex >= FIB_OFFSETS.length) {
+                if (now - entry.dueAt > 3 * 60 * 60 * 1000) prepTimerMap.delete(orderId);
+                continue;
+            }
+
+            const minutesSinceDue = (now - entry.dueAt) / 60000;
+            const nextOffset = FIB_OFFSETS[entry.nextAlertIndex];
+
+            if (minutesSinceDue >= nextOffset) {
+                const minutesOverdue = Math.floor(minutesSinceDue);
+                entry.alertsFired++;
+                entry.wasOverdue = true;
+                entry.nextAlertIndex++; // Advance; when >= FIB_OFFSETS.length, alerts stop
+
+                const activeOrders = prepTimerMap.size;
+                console.log(`\n   Prep overdue alert #${entry.alertsFired} for order ${orderId} (+${minutesOverdue}min, ${activeOrders} active)`);
+                await notifier.notifyPrepTimeOverdue(entry.notification, minutesOverdue, entry.alertsFired, activeOrders);
+
+                // Upsert into today's overdue log (resolved time filled when order goes terminal)
+                if (!overdueLog.find(e => e.orderId === orderId)) {
+                    overdueLog.push({
+                        orderId,
+                        last4: orderId.slice(-4),
+                        platform: entry.notification.platform.toUpperCase(),
+                        itemSummary: entry.notification.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', '),
+                        resolvedOverrunMinutes: null,
+                    });
+                }
             }
         }
-        // Prune fired entries older than 30 minutes to avoid unbounded growth
-        for (const [orderId, entry] of prepTimerMap) {
-            if (entry.fired && now - entry.dueAt > 30 * 60 * 1000) {
-                prepTimerMap.delete(orderId);
-            }
+    }
+
+    // Track whether promo alert was sent today at 3am
+    let promoAlertDate = '';
+
+    async function checkPromoAlert(): Promise<void> {
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const now = new Date(new Date().getTime() + istOffset);
+        const currentHour = now.getUTCHours();
+        const todayStr = now.toISOString().split('T')[0];
+
+        if (currentHour !== 3) return;
+        if (promoAlertDate === todayStr) return;
+
+        promoAlertDate = todayStr;
+
+        if (promoStats.size === 0) return;
+
+        const lowMarginOffers = Array.from(promoStats.entries()).filter(([, s]) => {
+            const avgNetPct = s.totalBill > 0 ? (s.totalNet / s.totalBill) * 100 : 100;
+            return avgNetPct < config.promoMarginAlertPct;
+        }) as [string, { orders: number; totalBill: number; totalNet: number; itemBurn: number }][];
+
+        if (lowMarginOffers.length > 0) {
+            await notifier.notifyPromoMarginAlert(lowMarginOffers, config.promoMarginAlertPct);
         }
     }
 
@@ -450,6 +683,11 @@ async function main(): Promise<void> {
             await checkMenuFetch();
         } catch (error) {
             console.error('Error in checkMenuFetch():', error);
+        }
+        try {
+            await checkPromoAlert();
+        } catch (error) {
+            console.error('Error in checkPromoAlert():', error);
         } finally {
             pollInProgress = false;
         }
