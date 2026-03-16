@@ -165,6 +165,7 @@ async function main(): Promise<void> {
         nextAlertIndex: number; // index into FIB_OFFSETS
         alertsFired: number;
         wasOverdue: boolean;    // has at least one alert fired
+        currentStatus: string;  // latest known order status; updated every poll cycle
     }
 
     // Maps orderId -> prep tracking entry
@@ -270,6 +271,10 @@ async function main(): Promise<void> {
 
                 // Mark as seen immediately to prevent re-processing if notifications block
                 deduplicator.markSeen(orderId, currentStatus);
+
+                // Keep PrepEntry status in sync so checkPrepTimeOverdue can self-suppress
+                const prepEntry = prepTimerMap.get(orderId);
+                if (prepEntry) prepEntry.currentStatus = currentStatus.toLowerCase();
 
                 const items = extractItems(order);
 
@@ -387,6 +392,7 @@ async function main(): Promise<void> {
                             nextAlertIndex: 0,
                             alertsFired: 0,
                             wasOverdue: false,
+                            currentStatus: currentStatus.toLowerCase(),
                         });
                     }
                 } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
@@ -416,8 +422,7 @@ async function main(): Promise<void> {
                     }
                 } else {
                     // Clear prep timer if order reached a terminal/ready state
-                    const terminalStatuses = ['delivered', 'ready', 'picked_up', 'pickedup', 'dispatched'];
-                    if (terminalStatuses.includes(currentStatus.toLowerCase())) {
+                    if (TERMINAL_STATUSES.has(currentStatus.toLowerCase())) {
                         const entry = prepTimerMap.get(orderId);
                         if (entry && entry.wasOverdue) {
                             const overrunMs = Date.now() - entry.dueAt;
@@ -592,6 +597,15 @@ async function main(): Promise<void> {
         swiggy.lastMenuFetchDate = todayStr;
     }
 
+    // Statuses that mean the order is done/ready — no more overdue alerts should fire.
+    // Kept here (not inside checkPrepTimeOverdue) so the terminal-delete path in poll() can
+    // reference the same set if needed in future.
+    const TERMINAL_STATUSES = new Set([
+        'delivered', 'ready', 'food_ready',
+        'picked_up', 'pickedup', 'dispatched',
+        'rider_assigned', 'out_for_delivery',
+    ]);
+
     async function checkPrepTimeOverdue(): Promise<void> {
         const now = Date.now();
         const today = getISTDateString();
@@ -599,6 +613,14 @@ async function main(): Promise<void> {
 
         for (const [orderId, entry] of prepTimerMap) {
             if (now < entry.dueAt) continue; // Not yet overdue
+
+            // Order already reached a terminal state — suppress further alerts.
+            // This guards against the poll() delete being missed (e.g. unknown status string)
+            // and against same-cycle races where status was updated before this check runs.
+            if (TERMINAL_STATUSES.has(entry.currentStatus)) {
+                prepTimerMap.delete(orderId);
+                continue;
+            }
 
             // All Fibonacci alerts exhausted — stop firing, prune after 3h
             if (entry.nextAlertIndex >= FIB_OFFSETS.length) {
