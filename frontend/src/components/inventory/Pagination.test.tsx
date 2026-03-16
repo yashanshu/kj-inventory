@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Pagination } from './Pagination';
 
+const enDash = '\u2013';
+
 describe('Pagination', () => {
   it('renders pagination controls with correct item counts', () => {
     const onPageChange = vi.fn();
@@ -18,7 +20,7 @@ describe('Pagination', () => {
     );
 
     // Should show the correct range
-    expect(screen.getByText(/1-10 of 25/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`1${enDash}10 of 25`))).toBeInTheDocument();
   });
 
   it('calculates correct total pages', () => {
@@ -56,7 +58,7 @@ describe('Pagination', () => {
     );
 
     // Second page should show items 11-20
-    expect(screen.getByText(/11-20 of 25/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`11${enDash}20 of 25`))).toBeInTheDocument();
   });
 
   it('shows correct range for last page with fewer items', () => {
@@ -74,7 +76,7 @@ describe('Pagination', () => {
     );
 
     // Third page should show items 21-25 (only 5 items)
-    expect(screen.getByText(/21-25 of 25/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`21${enDash}25 of 25`))).toBeInTheDocument();
   });
 
   it('disables previous button on first page', () => {
@@ -190,7 +192,7 @@ describe('Pagination', () => {
     );
 
     // Page 50 of a 1000 item dataset (10 per page) should show items 491-500
-    expect(screen.getByText(/491-500 of 1000/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`491${enDash}500 of 1000`))).toBeInTheDocument();
   });
 
   it('highlights current page', () => {
@@ -209,7 +211,6 @@ describe('Pagination', () => {
 
     const currentPageButton = screen.getByRole('button', { name: '2' });
 
-    // Current page should have the blue background class
-    expect(currentPageButton.className).toContain('bg-blue-600');
+    expect(currentPageButton).toHaveStyle({ background: 'var(--brand-600)' });
   });
 });

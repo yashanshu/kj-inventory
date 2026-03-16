@@ -79,7 +79,7 @@ describe('OrdersPage', () => {
 
         render(<OrdersPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Loading orders...')).toBeInTheDocument();
+        expect(screen.getByText(/Loading orders/i)).toBeInTheDocument();
     });
 
     it('renders orders table with data', async () => {
@@ -98,10 +98,8 @@ describe('OrdersPage', () => {
         render(<OrdersPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
-            // Check order IDs are displayed (last 8 chars)
-            // SWG123456.slice(-8) = "WG123456", ZOM789012.slice(-8) = "OM789012"
-            expect(screen.getByText('WG123456')).toBeInTheDocument();
-            expect(screen.getByText('OM789012')).toBeInTheDocument();
+            expect(screen.getByText(/#WG123456/)).toBeInTheDocument();
+            expect(screen.getByText(/#OM789012/)).toBeInTheDocument();
 
             // Check customer names
             expect(screen.getByText('Test Customer')).toBeInTheDocument();
@@ -154,7 +152,7 @@ describe('OrdersPage', () => {
 
         render(<OrdersPage />, { wrapper: createWrapper() });
 
-        const searchInput = screen.getByPlaceholderText('Search by customer name or order ID...');
+        const searchInput = screen.getByPlaceholderText(/Search by customer or order ID/i);
         fireEvent.change(searchInput, { target: { value: 'Test Customer' } });
 
         await waitFor(() => {

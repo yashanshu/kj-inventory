@@ -45,7 +45,7 @@ describe('ItemRow', () => {
     );
 
     expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /adjust stock/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /adjust/i })).toBeInTheDocument();
   });
 
   it('hides unit cost when showUnitCost is false', () => {

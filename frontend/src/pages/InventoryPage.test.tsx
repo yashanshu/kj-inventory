@@ -31,6 +31,8 @@ vi.mock('../store/authStore', () => ({
   })),
 }));
 
+const enDash = '\u2013';
+
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -103,8 +105,7 @@ describe('InventoryPage Pagination', () => {
     await waitFor(() => {
       // Should show the total count of 100, not just the 10 items on the current page
       expect(screen.getByText(/of 100/)).toBeInTheDocument();
-      // Page should show 1-10 of 100
-      expect(screen.getByText(/1-10 of 100/)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`1${enDash}10 of 100`))).toBeInTheDocument();
     });
   });
 
@@ -245,13 +246,8 @@ describe('InventoryPage Pagination', () => {
 
     render(<InventoryPage />, { wrapper: createWrapper() });
 
-    await waitFor(() => {
-      // Should display total of 47
-      expect(screen.getByText(/1-10 of 47/)).toBeInTheDocument();
-
-      // Should show page buttons - with 47 items and 10 per page, that's 5 pages
-      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '5' })).toBeInTheDocument();
-    });
+    expect(await screen.findByText(new RegExp(`1${enDash}10 of 47`))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '5' })).toBeInTheDocument();
   });
 });
