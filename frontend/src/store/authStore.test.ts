@@ -30,8 +30,10 @@ describe('useAuthStore.checkAuth', () => {
       user: {
         id: 'user-1',
         organizationId: 'org-1',
+        userId: 'user-1',
         email: 'admin@example.com',
-        name: 'Admin',
+        firstName: 'Admin',
+        lastName: '',
         role: 'ADMIN',
         isActive: true,
         createdAt: '2026-03-11T00:00:00Z',

@@ -1,3 +1,6 @@
+# MCP config (contains local paths)
+.mcp.json
+
 # Project Specific
 backend/.data/*
 config.yml
