@@ -41,13 +41,17 @@ RUN mkdir -p /app/data
 # Copy data preload
 # COPY data ./data-preload
 
+# Install su-exec for clean privilege dropping
+RUN apk add --no-cache su-exec
+
 # Run as non-root
 RUN addgroup -g 1001 scraper && \
     adduser -u 1001 -G scraper -s /bin/sh -D scraper && \
     chown -R scraper:scraper /app
 
-USER scraper
+# Entrypoint runs as root to fix volume permissions, then drops to scraper
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Copy session from preload to volume if it exists, then start
-CMD ["/bin/sh", "-c", "find /app/data/wwebjs_auth -name 'SingletonLock' -delete 2>/dev/null || true && if [ -f /app/data-preload/session.json ]; then cp /app/data-preload/session.json /app/data/session.json; fi && node dist/index.js"]
+ENTRYPOINT ["/entrypoint.sh"]
 

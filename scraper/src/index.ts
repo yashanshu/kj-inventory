@@ -16,6 +16,8 @@ import { KJApiClient } from './kj-api-client.js';
 import { config } from './config.js';
 import { createServer } from './server.js';
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 interface Shift {
     open: number;  // 0-23
     close: number; // 0-23 (if < open, means next day)
@@ -26,8 +28,7 @@ interface Shift {
  */
 function getISTHour(): number {
     const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const ist = new Date(now.getTime() + istOffset);
+    const ist = new Date(now.getTime() + IST_OFFSET_MS);
     return ist.getUTCHours();
 }
 
@@ -58,8 +59,7 @@ function isRestaurantOpen(): boolean {
  */
 function getNextShiftInfo(): { shift: Shift; minutesUntil: number } {
     const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const ist = new Date(now.getTime() + istOffset);
+    const ist = new Date(now.getTime() + IST_OFFSET_MS);
     const currentHour = ist.getUTCHours();
     const currentMinute = ist.getUTCMinutes();
 
@@ -97,7 +97,7 @@ let lastCountDate = '';
 
 function getISTDateString(): string {
     const now = new Date();
-    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const ist = new Date(now.getTime() + IST_OFFSET_MS);
     return ist.toISOString().slice(0, 10); // "2026-02-15"
 }
 
@@ -166,6 +166,8 @@ async function main(): Promise<void> {
         alertsFired: number;
         wasOverdue: boolean;    // has at least one alert fired
         currentStatus: string;  // latest known order status; updated every poll cycle
+        foodPreparedTime?: string; // set when restaurant marks food ready (vendorData.foodPreparedTime)
+        readyNotificationSent: boolean; // guards against double-firing notifyOrderReady
     }
 
     // Maps orderId -> prep tracking entry
@@ -217,6 +219,7 @@ async function main(): Promise<void> {
             const { orders, sessionExpired, stressedRestaurantIds } = await swiggy.fetchOrders();
 
             // Detect new stress onsets (false→true transitions only)
+            const currentlyStressedSet = new Set(stressedRestaurantIds);
             for (const rid of stressedRestaurantIds) {
                 if (!stressedRestaurants.has(rid)) {
                     stressedRestaurants.add(rid);
@@ -225,9 +228,9 @@ async function main(): Promise<void> {
                     await notifier.notifyKitchenStress(restaurantName);
                 }
             }
-            // Clear stress for restaurants no longer flagged
+            // Clear stress for restaurants no longer flagged (O(1) lookup via Set)
             for (const rid of stressedRestaurants) {
-                if (!stressedRestaurantIds.includes(rid)) {
+                if (!currentlyStressedSet.has(rid)) {
                     stressedRestaurants.delete(rid);
                 }
             }
@@ -256,6 +259,20 @@ async function main(): Promise<void> {
             }
 
             console.log(`\nReceived ${orders.length} order(s)`);
+
+            // Refresh foodPreparedTime on every poll for all tracked orders,
+            // regardless of whether order_status changed. The restaurant marks food
+            // ready by setting vendorData.foodPreparedTime — this doesn't change order_status.
+            for (const orderData of orders) {
+                const order: any = orderData;
+                const orderId = order.orderId || order.order_id || String(order.id);
+                const prepEntry = prepTimerMap.get(orderId);
+                if (prepEntry && order.vendorData?.foodPreparedTime && !prepEntry.foodPreparedTime) {
+                    prepEntry.foodPreparedTime = order.vendorData.foodPreparedTime;
+                    console.log(`   Food marked ready for order ${orderId} at ${prepEntry.foodPreparedTime}`);
+                }
+            }
+
             // Process each order
             for (const orderData of orders) {
                 const order: any = orderData;
@@ -393,14 +410,16 @@ async function main(): Promise<void> {
                             alertsFired: 0,
                             wasOverdue: false,
                             currentStatus: currentStatus.toLowerCase(),
+                            readyNotificationSent: false,
                         });
                     }
                 } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
                     await notifier.notifyCancelledOrder(orderNotification);
                     prepTimerMap.delete(orderId); // No longer relevant
 
-                    // Reverse promo stat if this order was previously counted
-                    if (orderNotification.offerDescription) {
+                    // Reverse promo stat if this order was previously counted.
+                    // Skip if promoStats rolled over at midnight (order was from a prior day).
+                    if (orderNotification.offerDescription && getISTDateString() === promoStatsDate) {
                         const key = orderNotification.offerDescription;
                         const existing = promoStats.get(key);
                         const contrib = existing?.contributions.get(orderId);
@@ -424,7 +443,8 @@ async function main(): Promise<void> {
                     // Clear prep timer if order reached a terminal/ready state
                     if (TERMINAL_STATUSES.has(currentStatus.toLowerCase())) {
                         const entry = prepTimerMap.get(orderId);
-                        if (entry && entry.wasOverdue) {
+                        if (entry && entry.wasOverdue && !entry.readyNotificationSent) {
+                            entry.readyNotificationSent = true;
                             const overrunMs = Date.now() - entry.dueAt;
                             const overrunMin = Math.max(1, Math.round(overrunMs / 60000));
                             await notifier.notifyOrderReady(entry.notification, entry.orderNumber, overrunMin);
@@ -508,7 +528,11 @@ async function main(): Promise<void> {
 
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                 console.error('\n3 consecutive errors. Sending notification and stopping.');
-                await notifier.notifyError(errMsg + causeInfo);
+                try {
+                    await notifier.notifyError(errMsg + causeInfo);
+                } catch (notifyErr: any) {
+                    console.error('Failed to send error notification:', notifyErr?.message || String(notifyErr));
+                }
                 if (pollTimer) clearInterval(pollTimer);
                 await deduplicator.save();
                 process.exit(1);
@@ -517,10 +541,9 @@ async function main(): Promise<void> {
     }
 
     async function checkDailySummary(): Promise<void> {
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const now = new Date(new Date().getTime() + istOffset);
+        const now = new Date(new Date().getTime() + IST_OFFSET_MS);
         const currentHour = now.getUTCHours();
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = getISTDateString();
 
         // Trigger at 7 AM IST
         if (currentHour !== 7) return;
@@ -533,9 +556,9 @@ async function main(): Promise<void> {
         // Get IST midnight as UTC timestamp
         const getISTMidnight = (dateObj: Date) => {
             const utcNow = dateObj.getTime();
-            const istNow = utcNow + istOffset;
+            const istNow = utcNow + IST_OFFSET_MS;
             const istMidnight = Math.floor(istNow / msPerDay) * msPerDay;
-            return istMidnight - istOffset;
+            return istMidnight - IST_OFFSET_MS;
         };
 
         const todayMidnightUTC = getISTMidnight(new Date());
@@ -585,10 +608,9 @@ async function main(): Promise<void> {
             return;
         }
 
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const now = new Date(new Date().getTime() + istOffset);
+        const now = new Date(new Date().getTime() + IST_OFFSET_MS);
         const currentHour = now.getUTCHours();
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = getISTDateString();
 
         if (currentHour < config.menuFetchHour) return;
         if (swiggy.lastMenuFetchDate === todayStr) return; // Already fetched today
@@ -612,12 +634,54 @@ async function main(): Promise<void> {
         if (today !== overdueLogDate) { overdueLog = []; overdueLogDate = today; }
 
         for (const [orderId, entry] of prepTimerMap) {
+            // Max-age TTL: remove any entry older than 6h past its due time (catches orders
+            // stuck in non-terminal status that never exhausted Fibonacci alerts).
+            if (now - entry.dueAt > 6 * 60 * 60 * 1000) {
+                console.log(`   prepTimerMap TTL prune: ${orderId}`);
+                prepTimerMap.delete(orderId);
+                continue;
+            }
+
             if (now < entry.dueAt) continue; // Not yet overdue
 
             // Order already reached a terminal state — suppress further alerts.
             // This guards against the poll() delete being missed (e.g. unknown status string)
             // and against same-cycle races where status was updated before this check runs.
             if (TERMINAL_STATUSES.has(entry.currentStatus)) {
+                prepTimerMap.delete(orderId);
+                continue;
+            }
+
+            // Restaurant has marked food ready — their responsibility ends here.
+            // vendorData.foodPreparedTime being set means the kitchen is done,
+            // even if order_status hasn't advanced to a terminal string yet.
+            if (entry.foodPreparedTime) {
+                if (entry.wasOverdue && !entry.readyNotificationSent) {
+                    entry.readyNotificationSent = true;
+                    // Calculate overrun relative to when food was actually ready.
+                    // Append +05:30 only if the timestamp has no timezone already.
+                    const fpt = entry.foodPreparedTime;
+                    const fptNormalized = /[Z+\-]\d{2}:?\d{2}$/.test(fpt) ? fpt : fpt + '+05:30';
+                    const readyMs = new Date(fptNormalized).getTime();
+                    const overrunMs = isNaN(readyMs) ? Math.max(0, now - entry.dueAt) : Math.max(0, readyMs - entry.dueAt);
+                    const overrunMin = Math.max(1, Math.round(overrunMs / 60000));
+                    console.log(`   Order ${orderId} food ready — overran by ${overrunMin}min`);
+                    await notifier.notifyOrderReady(entry.notification, entry.orderNumber, overrunMin);
+                    const today = getISTDateString();
+                    if (today !== overdueLogDate) { overdueLog = []; overdueLogDate = today; }
+                    const existing = overdueLog.find(e => e.orderId === orderId);
+                    if (existing) {
+                        existing.resolvedOverrunMinutes = overrunMin;
+                    } else {
+                        overdueLog.push({
+                            orderId,
+                            last4: orderId.slice(-4),
+                            platform: entry.notification.platform.toUpperCase(),
+                            itemSummary: entry.notification.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', '),
+                            resolvedOverrunMinutes: overrunMin,
+                        });
+                    }
+                }
                 prepTimerMap.delete(orderId);
                 continue;
             }
@@ -659,10 +723,9 @@ async function main(): Promise<void> {
     let promoAlertDate = '';
 
     async function checkPromoAlert(): Promise<void> {
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const now = new Date(new Date().getTime() + istOffset);
+        const now = new Date(new Date().getTime() + IST_OFFSET_MS);
         const currentHour = now.getUTCHours();
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = getISTDateString();
 
         if (currentHour !== 3) return;
         if (promoAlertDate === todayStr) return;
@@ -757,6 +820,10 @@ async function main(): Promise<void> {
 function extractItems(order: any): { name: string; quantity: number; price: number; finalPrice: number; variant?: string; addons?: string[] }[] {
     // Try common field names
     const items = order.items || order.order_items || order.cart?.items || [];
+    if (items.length === 0) {
+        const orderId = order.orderId || order.order_id || String(order.id);
+        console.warn(`   extractItems: no items found for order ${orderId} — API structure may have changed`);
+    }
 
     return items.map((item: any) => {
         const name = item.name || item.item_name || item.dish_name || 'Unknown';

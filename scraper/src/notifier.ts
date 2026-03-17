@@ -53,18 +53,26 @@ export class NotificationService {
     private fcmInitialized = false;
 
     async initialize(): Promise<void> {
+        const activeChannels: string[] = [];
+        const disabledReasons: string[] = [];
+
         // Initialize Telegram
         if (config.enableTelegram && config.telegramToken && config.telegramChatId) {
             this.telegramBot = new TelegramBot(config.telegramToken, { polling: false });
-            console.log('Telegram notifications enabled');
+            activeChannels.push('Telegram');
+        } else if (!config.enableTelegram) {
+            disabledReasons.push('Telegram (disabled)');
         } else {
-            console.log('Telegram notifications disabled or missing credentials');
+            disabledReasons.push(`Telegram (missing: ${!config.telegramToken ? 'TELEGRAM_TOKEN ' : ''}${!config.telegramChatId ? 'TELEGRAM_CHAT_ID' : ''})`);
         }
 
         // Initialize WhatsApp
         if (config.enableWhatsApp) {
             this.whatsApp = new WhatsAppService();
             await this.whatsApp.initialize();
+            activeChannels.push('WhatsApp');
+        } else {
+            disabledReasons.push('WhatsApp (disabled)');
         }
 
         // Initialize Firebase Cloud Messaging
@@ -79,12 +87,20 @@ export class NotificationService {
                 }
 
                 this.fcmInitialized = true;
-                console.log('Firebase FCM notifications enabled');
+                activeChannels.push('FCM');
             } catch (error) {
                 console.warn('Failed to initialize Firebase:', error);
+                disabledReasons.push('FCM (init error)');
             }
+        } else if (!config.enableFCM) {
+            disabledReasons.push('FCM (disabled)');
         } else {
-            console.log('FCM notifications disabled or missing config');
+            disabledReasons.push(`FCM (missing: ${!config.firebaseServiceAccountPath ? 'FIREBASE_SERVICE_ACCOUNT ' : ''}${!config.firebaseFcmToken ? 'FIREBASE_FCM_TOKEN' : ''})`);
+        }
+
+        console.log(`Notification channels active: ${activeChannels.length > 0 ? activeChannels.join(', ') : 'NONE'}`);
+        if (disabledReasons.length > 0) {
+            console.log(`Channels disabled: ${disabledReasons.join(' | ')}`);
         }
     }
 
@@ -110,7 +126,7 @@ export class NotificationService {
         // Send WhatsApp notification
         if (this.whatsApp) {
             promises.push(
-                this.whatsApp.sendMessage(waMessage).catch(err => {
+                this.whatsApp.sendMessage(this.truncateWA(waMessage)).catch(err => {
                     console.error('WhatsApp notification failed:', err.message);
                 })
             );
@@ -168,7 +184,7 @@ export class NotificationService {
         }
 
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(plainMessage).catch(err => {
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(plainMessage)).catch(err => {
                 console.error('WhatsApp cancellation notification failed:', err.message);
             }));
         }
@@ -200,7 +216,7 @@ export class NotificationService {
                 .then(() => { }).catch(err => console.error('Telegram overdue alert failed:', err.message)));
         }
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(waMessage)
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp overdue alert failed:', err.message)));
         }
         await Promise.allSettled(promises);
@@ -220,7 +236,7 @@ export class NotificationService {
                 .then(() => { }).catch(err => console.error('Telegram ready notification failed:', err.message)));
         }
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(waMessage)
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp ready notification failed:', err.message)));
         }
         await Promise.allSettled(promises);
@@ -267,7 +283,7 @@ export class NotificationService {
                 .then(() => { }).catch(err => console.error('Telegram complaint outlier alert failed:', err.message)));
         }
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(waMessage)
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp complaint outlier alert failed:', err.message)));
         }
         if (this.fcmInitialized && config.firebaseFcmToken) {
@@ -292,7 +308,7 @@ export class NotificationService {
                 .then(() => { }).catch(err => console.error('Telegram promo alert failed:', err.message)));
         }
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(waMessage)
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp promo alert failed:', err.message)));
         }
         await Promise.allSettled(promises);
@@ -308,7 +324,7 @@ export class NotificationService {
                 .then(() => { }).catch(err => console.error('Telegram stress alert failed:', err.message)));
         }
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(waMessage)
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp stress alert failed:', err.message)));
         }
         if (this.fcmInitialized && config.firebaseFcmToken) {
@@ -352,7 +368,7 @@ export class NotificationService {
 
         if (this.whatsApp) {
             promises.push(
-                this.whatsApp.sendMessage(waMessage)
+                this.whatsApp.sendMessage(this.truncateWA(waMessage))
                     .then(() => console.log('WhatsApp test notification sent'))
                     .catch(err => console.error('WhatsApp test notification failed:', err.message))
             );
@@ -517,7 +533,7 @@ ${promoWaSection}`;
 
         if (this.whatsApp) {
             promises.push(
-                this.whatsApp.sendMessage(waMessage)
+                this.whatsApp.sendMessage(this.truncateWA(waMessage))
                     .then(() => console.log('Daily summary sent to WhatsApp'))
                     .catch(err => console.error('WhatsApp summary failed:', err.message))
             );
@@ -527,17 +543,21 @@ ${promoWaSection}`;
     }
 
     private async sendAlertToAll(htmlMessage: string, plainMessage: string, fcmTitle: string, fcmBody: string): Promise<void> {
+        const channelNames: string[] = [];
         const promises: Promise<void>[] = [];
 
         if (this.telegramBot && config.telegramChatId) {
+            channelNames.push('telegram');
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' }).then(() => { }));
         }
 
         if (this.whatsApp) {
-            promises.push(this.whatsApp.sendMessage(plainMessage).then(() => { }));
+            channelNames.push('whatsapp');
+            promises.push(this.whatsApp.sendMessage(this.truncateWA(plainMessage)).then(() => { }));
         }
 
         if (this.fcmInitialized && config.firebaseFcmToken) {
+            channelNames.push('fcm');
             promises.push(admin.messaging().send({
                 token: config.firebaseFcmToken,
                 notification: { title: fcmTitle, body: fcmBody },
@@ -545,7 +565,12 @@ ${promoWaSection}`;
             }).then(() => { }));
         }
 
-        await Promise.allSettled(promises);
+        const results = await Promise.allSettled(promises);
+        results.forEach((result, i) => {
+            if (result.status === 'rejected') {
+                console.error(`Critical alert failed on ${channelNames[i]}:`, result.reason?.message || String(result.reason));
+            }
+        });
     }
 
     private computeRiskTag(order: OrderNotification): 'HIGH' | 'MEDIUM' | null {
@@ -665,6 +690,13 @@ ${riskRow}`.trim();
 *Prep:* ${prepTime}  |  ${orderTime}
 
 ${itemsList || '(items not available)'}${areaRow}${siRow}${netRow}`;
+    }
+
+    /** Truncate a WhatsApp message to stay within the 4096-char limit. */
+    private truncateWA(message: string, limit = 4000): string {
+        if (message.length <= limit) return message;
+        const suffix = '\n…(truncated)';
+        return message.slice(0, limit - suffix.length) + suffix;
     }
 
     async shutdown(): Promise<void> {
