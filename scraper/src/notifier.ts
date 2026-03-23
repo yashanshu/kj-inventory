@@ -242,20 +242,6 @@ export class NotificationService {
         await Promise.allSettled(promises);
     }
 
-    async notifyMFRMiss(order: OrderNotification): Promise<void> {
-        const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
-        const last4 = order.orderId.slice(-4);
-        const itemSummary = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-
-        const htmlMessage = `📉 <b>MFR Miss — ...${last4} (${platformLabel})</b>\nPrep time prediction was not met. This affects your Swiggy ranking.\n${itemSummary || '—'}`;
-        const promises: Promise<void>[] = [];
-        if (this.telegramBot && config.telegramChatId) {
-            promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
-                .then(() => { }).catch(err => console.error('Telegram MFR miss alert failed:', err.message)));
-        }
-        await Promise.allSettled(promises);
-    }
-
     async notifyHandoverDelay(order: OrderNotification, deWaitMinutes: number): Promise<void> {
         const platformLabel = order.platform === 'zomato' ? 'ZOMATO' : 'SWIGGY';
         const last4 = order.orderId.slice(-4);
@@ -627,8 +613,7 @@ ${promoWaSection}`;
         const packingRow = order.packingCharge > 0 ? `<b>Packing:</b> ₹${order.packingCharge.toFixed(0)}\n` : '';
         let discountRow = '';
         if (order.restaurantDiscount > 0) {
-            const offerText = order.offerDescription ? ` (${order.offerDescription})` : '';
-            discountRow = `<b>Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}${offerText}\n`;
+            discountRow = `<b>Discount:</b> -₹${order.restaurantDiscount.toFixed(0)}\n`;
         }
 
         const marginPct = order.orderValue > 0
@@ -677,10 +662,6 @@ ${riskRow}`.trim();
             ? Math.round(order.netEarnings / order.orderValue * 100)
             : 0;
         let netRow = `\n*Net:* ₹${order.netEarnings.toFixed(0)} (${marginPct}%)`;
-        if (order.restaurantDiscount > 0) {
-            const offerText = order.offerDescription ? ` · _${order.offerDescription}_` : '';
-            netRow += offerText;
-        }
         const riskTag = this.computeRiskTag(order);
         if (riskTag) {
             netRow += ` · *${riskTag === 'HIGH' ? '🔴 HIGH RISK' : '🟡 MEDIUM RISK'}*`;

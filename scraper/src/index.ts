@@ -273,6 +273,11 @@ async function main(): Promise<void> {
                 }
             }
 
+            // Constants hoisted out of the per-order loop
+            const RESTAURANT_MAP = config.restaurantMap;
+            const notifyStatuses = new Set(['ordered', 'placed']);
+            const cancelStatuses = new Set(['cancelled', 'canceled']);
+
             // Process each order
             for (const orderData of orders) {
                 const order: any = orderData;
@@ -296,22 +301,18 @@ async function main(): Promise<void> {
                 const items = extractItems(order);
 
                 // Financials extraction
-                // bill = Order Value (item totals + packing)
+                // Subtotal = sum of item MRPs (sub_total before any discount)
+                const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+                // bill = Order Value (item totals + packing); falls back to subtotal when absent
                 let orderValue: number;
                 if (typeof order.bill === 'number' && order.bill > 0) {
                     orderValue = order.bill;
                 } else if (order.bill && typeof order.bill === 'object') {
-                    orderValue = order.bill.total || 0;
+                    orderValue = order.bill.total || subtotal;
                 } else {
-                    orderValue = 0;
+                    orderValue = subtotal;
                 }
-                // Fallback: sum from items MRP
-                if (orderValue === 0) {
-                    orderValue = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-                }
-
-                // Subtotal = sum of item MRPs (sub_total before any discount)
-                const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
                 // Packing charge
                 const packingCharge = order.cart?.charges?.packing_charge || 0;
@@ -345,7 +346,6 @@ async function main(): Promise<void> {
                 const prepTime = order.prep_time_details?.predicted_prep_time || order.prep_time_predicted || 0;
 
                 // Restaurant Mapping — from env config, fallback to hardcoded
-                const RESTAURANT_MAP = config.restaurantMap;
                 const restaurantNameFromMap = RESTAURANT_MAP[String(order.restaurantId)] || RESTAURANT_MAP[String(order.restaurant_id)];
 
                 // Extract order details
@@ -371,15 +371,11 @@ async function main(): Promise<void> {
                     itemComplexity
                 };
 
-                // Notify for new orders and cancellations
-                const notifyStatuses = ['ordered', 'placed'];
-                const cancelStatuses = ['cancelled', 'canceled'];
-
                 // Item-level discount burn (only non-zero for % offers)
-                const itemBurnTotal: number = (order.items || order.order_items || order.cart?.items || [])
+                const itemBurnTotal: number = rawItems
                     .reduce((s: number, item: any) => s + (parseFloat(item.restaurant_discount_hit) || 0), 0);
 
-                if (notifyStatuses.includes(currentStatus.toLowerCase())) {
+                if (notifyStatuses.has(currentStatus.toLowerCase())) {
                     const orderNumber = getNextOrderNumber();
                     await notifier.notifyNewOrder(orderNotification, orderNumber);
 
@@ -413,7 +409,7 @@ async function main(): Promise<void> {
                             readyNotificationSent: false,
                         });
                     }
-                } else if (cancelStatuses.includes(currentStatus.toLowerCase())) {
+                } else if (cancelStatuses.has(currentStatus.toLowerCase())) {
                     await notifier.notifyCancelledOrder(orderNotification);
                     prepTimerMap.delete(orderId); // No longer relevant
 
@@ -440,30 +436,10 @@ async function main(): Promise<void> {
                         }
                     }
                 } else {
-                    // Clear prep timer if order reached a terminal/ready state
+                    // Clear prep timer if order reached a terminal/ready state.
+                    // notifyOrderReady is only sent via checkPrepTimeOverdue when foodPreparedTime
+                    // is set — that is the authoritative "kitchen done" signal. Here we just prune.
                     if (TERMINAL_STATUSES.has(currentStatus.toLowerCase())) {
-                        const entry = prepTimerMap.get(orderId);
-                        if (entry && entry.wasOverdue && !entry.readyNotificationSent) {
-                            entry.readyNotificationSent = true;
-                            const overrunMs = Date.now() - entry.dueAt;
-                            const overrunMin = Math.max(1, Math.round(overrunMs / 60000));
-                            await notifier.notifyOrderReady(entry.notification, entry.orderNumber, overrunMin);
-                            // Record in daily overdue log
-                            const today = getISTDateString();
-                            if (today !== overdueLogDate) { overdueLog = []; overdueLogDate = today; }
-                            const existing = overdueLog.find(e => e.orderId === orderId);
-                            if (existing) {
-                                existing.resolvedOverrunMinutes = overrunMin;
-                            } else {
-                                overdueLog.push({
-                                    orderId,
-                                    last4: orderId.slice(-4),
-                                    platform: orderNotification.platform.toUpperCase(),
-                                    itemSummary: orderNotification.items.map(i => `${i.quantity}x ${i.name}`).join(', '),
-                                    resolvedOverrunMinutes: overrunMin,
-                                });
-                            }
-                        }
                         prepTimerMap.delete(orderId);
 
                         // MFR accuracy tracking (only meaningful on delivered)
@@ -475,7 +451,6 @@ async function main(): Promise<void> {
                                 mfrLog.hits++;
                             } else if (order.isMFRAccurate === false) {
                                 mfrLog.misses++;
-                                await notifier.notifyMFRMiss(orderNotification);
                             }
 
                             // Handover delay — DE waited at door
@@ -642,8 +617,6 @@ async function main(): Promise<void> {
                 continue;
             }
 
-            if (now < entry.dueAt) continue; // Not yet overdue
-
             // Order already reached a terminal state — suppress further alerts.
             // This guards against the poll() delete being missed (e.g. unknown status string)
             // and against same-cycle races where status was updated before this check runs.
@@ -655,6 +628,7 @@ async function main(): Promise<void> {
             // Restaurant has marked food ready — their responsibility ends here.
             // vendorData.foodPreparedTime being set means the kitchen is done,
             // even if order_status hasn't advanced to a terminal string yet.
+            // Check this before the dueAt guard so on-time completions are pruned promptly.
             if (entry.foodPreparedTime) {
                 if (entry.wasOverdue && !entry.readyNotificationSent) {
                     entry.readyNotificationSent = true;
@@ -685,6 +659,8 @@ async function main(): Promise<void> {
                 prepTimerMap.delete(orderId);
                 continue;
             }
+
+            if (now < entry.dueAt) continue; // Not yet overdue — no alert, keep tracking
 
             // All Fibonacci alerts exhausted — stop firing, prune after 3h
             if (entry.nextAlertIndex >= FIB_OFFSETS.length) {
