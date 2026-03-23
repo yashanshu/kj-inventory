@@ -117,6 +117,31 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  backup:
+    image: alpine:latest
+    restart: unless-stopped
+    volumes:
+      - app-data:/data:ro
+      - backup-store:/backups
+    entrypoint: >
+      sh -c "
+        echo 'Backup service started';
+        while true; do
+          STAMP=$$(date -u +%Y%m%d_%H%M%S);
+          cp /data/inventory.db /backups/inventory_$${STAMP}.db;
+          echo \"[$$STAMP] Backup written: inventory_$${STAMP}.db\";
+          find /backups -name 'inventory_*.db' -mtime +7 -delete;
+          sleep 86400;
+        done
+      "
+    networks:
+      - kj-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 32M
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -142,5 +167,7 @@ volumes:
   app-data:
     driver: local
   scraper-data:
+    driver: local
+  backup-store:
     driver: local
 

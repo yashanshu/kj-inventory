@@ -26,6 +26,11 @@ type CORS struct {
 	AllowedOrigins []string
 }
 
+type LedgrCfg struct {
+	AttachmentDir     string
+	AttachmentMaxSize int64 // bytes
+}
+
 type Config struct {
 	Server      ServerCfg
 	Database    DBCfg
@@ -33,6 +38,7 @@ type Config struct {
 	CORS        CORS
 	ServeStatic bool
 	LogLevel    string
+	Ledgr       LedgrCfg
 }
 
 func Load() Config {
@@ -45,7 +51,7 @@ func Load() Config {
 		driver = "sqlite"
 	}
 
-	defaultDSN := "file:./backend/data/inventory.db?_fk=1"
+	defaultDSN := "file:./backend/data/inventory_latest.db?_fk=1"
 	dsn := normalizeSQLiteDSN(getEnv("DATABASE_URL", defaultDSN))
 
 	jwtSecret := getEnv("JWT_SECRET", "change-me")
@@ -65,6 +71,10 @@ func Load() Config {
 		CORS:        CORS{AllowedOrigins: corsOrigins},
 		ServeStatic: serveStatic,
 		LogLevel:    logLevel,
+		Ledgr: LedgrCfg{
+			AttachmentDir:     getEnv("LEDGR_ATTACHMENT_DIR", "./data/attachments"),
+			AttachmentMaxSize: int64(getEnvAsInt("LEDGR_ATTACHMENT_MAX_SIZE_MB", 10)) * 1024 * 1024,
+		},
 	}
 }
 

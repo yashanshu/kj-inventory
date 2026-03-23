@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS idx_ledgr_attachments_expense;
+DROP TABLE IF EXISTS ledgr_attachments;
+DROP TABLE IF EXISTS ledgr_salary_deductions;
+DROP TABLE IF EXISTS ledgr_salary_details;
+DROP INDEX IF EXISTS idx_ledgr_templates_org;
+DROP TABLE IF EXISTS ledgr_templates;
+DROP INDEX IF EXISTS idx_ledgr_daylog_audit_daylog;
+DROP TABLE IF EXISTS ledgr_daylog_audit;
+DROP INDEX IF EXISTS idx_ledgr_daylog_org_date;
+DROP TABLE IF EXISTS ledgr_daylog;

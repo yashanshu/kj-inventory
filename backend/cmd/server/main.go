@@ -11,6 +11,9 @@ import (
 	"hasufel.kj/internal/config"
 	"hasufel.kj/internal/database"
 	"hasufel.kj/internal/handlers"
+	ledgr_handlers "hasufel.kj/internal/ledgr/handlers"
+	ledgr_repo "hasufel.kj/internal/ledgr/repository"
+	ledgr_service "hasufel.kj/internal/ledgr/service"
 	"hasufel.kj/internal/middleware"
 	"hasufel.kj/internal/repository"
 	"hasufel.kj/internal/services"
@@ -62,6 +65,38 @@ func main() {
 	menuHandler := handlers.NewMenuHandler(menuRepo, log)
 	storeHandler := handlers.NewStoreHandler(storeRepo, log)
 	bindingHandler := handlers.NewPlatformBindingHandler(bindingRepo, log)
+
+	// ---- Ledgr module ----
+	// Ensure ledgr_enabled column exists (idempotent; safe for combined deployment).
+	ledgrOrgRepo := ledgr_repo.NewOrgRepository(db)
+	if err := ledgrOrgRepo.EnsureLedgrColumn(); err != nil {
+		log.Fatal("Failed to ensure ledgr_enabled column", "error", err)
+	}
+
+	ledgrExpenseRepo    := ledgr_repo.NewExpenseRepository(db)
+	ledgrCategoryRepo   := ledgr_repo.NewCategoryRepository(db)
+	ledgrDaylogRepo     := ledgr_repo.NewDaylogRepository(db)
+	ledgrTemplateRepo   := ledgr_repo.NewTemplateRepository(db)
+	ledgrPartnerRepo    := ledgr_repo.NewPartnerRepository(db)
+	ledgrStoreRepo      := ledgr_repo.NewStoreRepository(db)
+	ledgrAttachmentRepo := ledgr_repo.NewAttachmentRepository(db)
+
+	ledgrExpenseService    := ledgr_service.NewExpenseService(ledgrExpenseRepo, ledgrCategoryRepo, ledgrDaylogRepo)
+	ledgrLockService       := ledgr_service.NewLockService(ledgrDaylogRepo)
+	ledgrReportService     := ledgr_service.NewReportService(ledgrExpenseRepo)
+	ledgrExportService     := ledgr_service.NewExportService(ledgrExpenseRepo)
+	ledgrAttachmentService := ledgr_service.NewAttachmentService(ledgrAttachmentRepo, cfg.Ledgr.AttachmentDir, cfg.Ledgr.AttachmentMaxSize)
+
+	ledgrExpenseHandler    := ledgr_handlers.NewExpenseHandler(ledgrExpenseService, log)
+	ledgrCategoryHandler   := ledgr_handlers.NewCategoryHandler(ledgrCategoryRepo, log)
+	ledgrDaylogHandler     := ledgr_handlers.NewDaylogHandler(ledgrLockService, log)
+	ledgrTemplateHandler   := ledgr_handlers.NewTemplateHandler(ledgrTemplateRepo, log)
+	ledgrPartnerHandler    := ledgr_handlers.NewPartnerHandler(ledgrPartnerRepo, ledgrExpenseService, log)
+	ledgrReportHandler     := ledgr_handlers.NewReportHandler(ledgrReportService, log)
+	ledgrExportHandler     := ledgr_handlers.NewExportHandler(ledgrExportService, log)
+	ledgrStoreHandler      := ledgr_handlers.NewStoreHandler(ledgrStoreRepo, log)
+	ledgrAttachmentHandler := ledgr_handlers.NewAttachmentHandler(ledgrAttachmentService, log)
+	// ---- end Ledgr module ----
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -157,12 +192,62 @@ func main() {
 			r.Put("/platform-bindings/{id}", bindingHandler.Update)
 			r.Delete("/platform-bindings/{id}", bindingHandler.Delete)
 		})
+
+		// Ledgr module routes (JWT auth + feature flag guard applied inside)
+		r.Route("/ledgr", func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware(cfg.JWT.Secret))
+			r.Use(ledgr_handlers.LedgrFeatureGuard(ledgrOrgRepo))
+
+			r.Get("/stores", ledgrStoreHandler.List)
+
+			r.Post("/expenses", ledgrExpenseHandler.Create)
+			r.Get("/expenses", ledgrExpenseHandler.List)
+			r.Get("/expenses/calendar/{year}/{month}", ledgrExpenseHandler.CalendarSummary)
+			r.Get("/expenses/{id}", ledgrExpenseHandler.Get)
+			r.Put("/expenses/{id}", ledgrExpenseHandler.Update)
+			r.Delete("/expenses/{id}", ledgrExpenseHandler.Delete)
+
+			r.Post("/categories", ledgrCategoryHandler.Create)
+			r.Get("/categories", ledgrCategoryHandler.List)
+			r.Put("/categories/{id}", ledgrCategoryHandler.Update)
+			r.Delete("/categories/{id}", ledgrCategoryHandler.Delete)
+
+			r.Get("/daylog/{date}", ledgrDaylogHandler.Get)
+			r.Post("/daylog/{date}/submit", ledgrDaylogHandler.Submit)
+			r.Post("/daylog/{date}/lock", ledgrDaylogHandler.Lock)
+			r.Post("/daylog/{date}/unlock", ledgrDaylogHandler.Unlock)
+
+			r.Get("/templates", ledgrTemplateHandler.List)
+			r.Post("/templates", ledgrTemplateHandler.Create)
+			r.Put("/templates/{id}", ledgrTemplateHandler.Update)
+			r.Delete("/templates/{id}", ledgrTemplateHandler.Delete)
+
+			r.Get("/partners/balances", ledgrPartnerHandler.Balances)
+			r.Post("/settlements", ledgrPartnerHandler.CreateSettlement)
+
+			r.Get("/reports/pl", ledgrReportHandler.PL)
+			r.Get("/reports/gst", ledgrReportHandler.GST)
+			r.Get("/reports/partners", ledgrReportHandler.Partners)
+
+			r.Get("/exports/csv", ledgrExportHandler.CSV)
+			r.Get("/exports/pdf", ledgrExportHandler.PDF)
+
+			r.Post("/attachments", ledgrAttachmentHandler.Upload)
+			r.Get("/attachments/{id}", ledgrAttachmentHandler.Get)
+			r.Delete("/attachments/{id}", ledgrAttachmentHandler.Delete)
+		})
 	})
 
 	// Serve static files (React build) - must be last to not catch API routes
 	if cfg.ServeStatic {
 		// Custom handler for SPA routing
 		spaHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Never intercept OPTIONS — let the CORS middleware handle preflights.
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
 			path := "./frontend/dist" + r.URL.Path
 
 			// Check if file exists

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__search_for_pattern",
+      "Read(//d/DUMP/stitch_ledgr_prd/ledgr_prd/**)"
+    ]
+  }
+}
