@@ -1,7 +1,8 @@
 # KJ Order Scraper
 FROM node:20-alpine
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN apk add --no-cache git && \
+    corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
