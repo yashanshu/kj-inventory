@@ -42,7 +42,7 @@ export class WhatsAppService {
     private async connect(): Promise<void> {
         // Tear down any existing socket and its listeners before creating a new one
         if (this.sock) {
-            this.sock.ev.removeAllListeners();
+            (this.sock.ev as any).removeAllListeners();
             try { this.sock.end(undefined); } catch {}
             this.sock = null;
         }
@@ -50,17 +50,19 @@ export class WhatsAppService {
         const authDir = path.join(process.cwd(), 'data', 'baileys_auth');
         const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
+        const noopLogger = Object.fromEntries(
+            ['trace','debug','info','warn','error','fatal','child'].map(k => [k, () => {}])
+        ) as any;
+
         this.sock = makeWASocket({
             version: this.waVersion,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, undefined),
+                keys: makeCacheableSignalKeyStore(state.keys, noopLogger),
             },
             printQRInTerminal: true,
             // Suppress noisy default logger
-            logger: Object.fromEntries(
-                ['trace','debug','info','warn','error','fatal','child'].map(k => [k, () => {}])
-            ) as any,
+            logger: noopLogger,
             generateHighQualityLinkPreview: false,
             syncFullHistory: false,
         });
@@ -124,7 +126,7 @@ export class WhatsAppService {
         }
 
         if (this.sock) {
-            this.sock.ev.removeAllListeners();
+            (this.sock.ev as any).removeAllListeners();
             try { this.sock.end(undefined); } catch {}
             this.sock = null;
         }
