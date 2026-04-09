@@ -34,11 +34,28 @@ function parseRestaurantMap(): Record<string, string> {
     return {};
 }
 
+function parseEvents(env: string | undefined): Set<string> | null {
+    if (!env || !env.trim()) return null; // null = unrestricted (all events allowed)
+    return new Set(env.split(',').map(s => s.trim().toLowerCase()));
+}
+
 export const config = {
-    // Toggles
+    // Channel toggles (global on/off)
     enableWhatsApp: process.env.ENABLE_WHATSAPP === 'true',
     enableTelegram: process.env.ENABLE_TELEGRAM !== 'false', // Default true
     enableFCM: process.env.ENABLE_FCM !== 'false',           // Default true
+
+    // Per-channel event whitelists
+    // Comma-separated event names each channel is allowed to send.
+    // Omit (or leave blank) to allow all events on that channel.
+    // Valid events: new_order, cancelled_order, overdue, order_ready,
+    //               handover_delay, complaint, kitchen_stress,
+    //               session_expired, error, daily_summary, promo_alert
+    // Example: WHATSAPP_EVENTS=new_order         → WhatsApp only for new orders
+    //          FCM_EVENTS=new_order,complaint     → FCM for new orders + complaints only
+    whatsappEvents: parseEvents(process.env.WHATSAPP_EVENTS),
+    telegramEvents: parseEvents(process.env.TELEGRAM_EVENTS),
+    fcmEvents:      parseEvents(process.env.FCM_EVENTS),
 
     // Puppeteer / Browser
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false', // Default true

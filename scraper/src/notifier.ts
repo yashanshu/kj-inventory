@@ -52,6 +52,13 @@ export class NotificationService {
     private whatsApp: WhatsAppService | null = null;
     private fcmInitialized = false;
 
+    /** Returns true if the given channel is allowed to send the given event type. */
+    private allows(channel: 'whatsapp' | 'telegram' | 'fcm', event: string): boolean {
+        const lists = { whatsapp: config.whatsappEvents, telegram: config.telegramEvents, fcm: config.fcmEvents };
+        const allowed = lists[channel];
+        return allowed === null || allowed.has(event);
+    }
+
     async initialize(): Promise<void> {
         const activeChannels: string[] = [];
         const disabledReasons: string[] = [];
@@ -110,8 +117,7 @@ export class NotificationService {
 
         const promises: Promise<void>[] = [];
 
-        // Send Telegram notification
-        if (this.telegramBot && config.telegramChatId) {
+        if (this.telegramBot && config.telegramChatId && this.allows('telegram', 'new_order')) {
             promises.push(
                 this.telegramBot.sendMessage(config.telegramChatId, message, {
                     parse_mode: 'HTML',
@@ -123,8 +129,7 @@ export class NotificationService {
             );
         }
 
-        // Send WhatsApp notification
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'new_order')) {
             promises.push(
                 this.whatsApp.sendMessage(this.truncateWA(waMessage)).catch(err => {
                     console.error('WhatsApp notification failed:', err.message);
@@ -132,8 +137,7 @@ export class NotificationService {
             );
         }
 
-        // Send FCM notification
-        if (this.fcmInitialized && config.firebaseFcmToken) {
+        if (this.fcmInitialized && config.firebaseFcmToken && this.allows('fcm', 'new_order')) {
             promises.push(
                 admin.messaging().send({
                     token: config.firebaseFcmToken,
@@ -183,7 +187,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' }).then(() => { }));
         }
 
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'cancelled_order')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(plainMessage)).catch(err => {
                 console.error('WhatsApp cancellation notification failed:', err.message);
             }));
@@ -215,7 +219,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
                 .then(() => { }).catch(err => console.error('Telegram overdue alert failed:', err.message)));
         }
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'overdue')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp overdue alert failed:', err.message)));
         }
@@ -235,7 +239,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
                 .then(() => { }).catch(err => console.error('Telegram ready notification failed:', err.message)));
         }
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'order_ready')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp ready notification failed:', err.message)));
         }
@@ -268,7 +272,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
                 .then(() => { }).catch(err => console.error('Telegram complaint outlier alert failed:', err.message)));
         }
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'complaint')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp complaint outlier alert failed:', err.message)));
         }
@@ -293,7 +297,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
                 .then(() => { }).catch(err => console.error('Telegram promo alert failed:', err.message)));
         }
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'promo_alert')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp promo alert failed:', err.message)));
         }
@@ -309,7 +313,7 @@ export class NotificationService {
             promises.push(this.telegramBot.sendMessage(config.telegramChatId, htmlMessage, { parse_mode: 'HTML' })
                 .then(() => { }).catch(err => console.error('Telegram stress alert failed:', err.message)));
         }
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'kitchen_stress')) {
             promises.push(this.whatsApp.sendMessage(this.truncateWA(waMessage))
                 .catch(err => console.error('WhatsApp stress alert failed:', err.message)));
         }
@@ -517,7 +521,7 @@ ${promoWaSection}`;
             );
         }
 
-        if (this.whatsApp) {
+        if (this.whatsApp && this.allows('whatsapp', 'daily_summary')) {
             promises.push(
                 this.whatsApp.sendMessage(this.truncateWA(waMessage))
                     .then(() => console.log('Daily summary sent to WhatsApp'))
