@@ -1,30 +1,12 @@
 # KJ Order Scraper
 FROM node:20-alpine
 
-# Install Playwright dependencies and pnpm
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont && \
-    corepack enable && corepack prepare pnpm@latest --activate
-
-# Set Playwright to use system Chromium
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Set Puppeteer to use system Chromium (for whatsapp-web.js)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
 # Copy package files
 COPY package.json ./
-# Relax constraints: don't require frozen lockfile, just install what's needed
-# Force installation of devDependencies (typescript) for the build step
 RUN pnpm install --config.production=false
 
 # Copy source
@@ -36,10 +18,6 @@ RUN pnpm run build
 
 # Create data directory
 RUN mkdir -p /app/data
-
-# Copy data preload
-# Copy data preload
-# COPY data ./data-preload
 
 # Install su-exec for clean privilege dropping
 RUN apk add --no-cache su-exec
@@ -54,4 +32,3 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
-

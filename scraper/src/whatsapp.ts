@@ -1,16 +1,22 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import qrcode from 'qrcode-terminal';
+import makeWASocket, {
+    DisconnectReason,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    type ConnectionState,
+} from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import path from 'path';
 import { config } from './config.js';
 
-const SEND_TIMEOUT_MS = 15_000; // 15s max for sendMessage
-const MAX_CONSECUTIVE_FAILURES = 3;
+const SEND_TIMEOUT_MS = 15_000;
 
 export class WhatsAppService {
-    private client: Client | null = null;
+    private sock: ReturnType<typeof makeWASocket> | null = null;
     private isReady = false;
-    private consecutiveFailures = 0;
-    private restarting = false;
+    private shouldReconnect = true;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    private waVersion: [number, number, number] | undefined;
 
     async initialize(): Promise<void> {
         if (!config.enableWhatsApp) {
@@ -19,104 +25,70 @@ export class WhatsAppService {
         }
 
         console.log('Initializing WhatsApp Service...');
+        this.shouldReconnect = true;
 
-        this.client = new Client({
-            authStrategy: new LocalAuth({
-                dataPath: path.join(process.cwd(), 'data', 'wwebjs_auth')
-            }),
-            puppeteer: {
-                headless: config.puppeteerHeadless,
-                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--disable-extensions',
-                    '--disable-gpu',
-                    '--disable-software-rasterizer',
-                    '--disable-background-timer-throttling',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-renderer-backgrounding',
-                    '--disable-crash-reporter',
-                    '--no-zygote',
-                ],
-                timeout: 60000 // 60 seconds timeout
-            }
-        });
-
-        this.client.on('qr', (qr) => {
-            console.log('\n=============================================================');
-            console.log('WHATSAPP QR CODE RECEIVED');
-            console.log('Scan this code with WhatsApp (Linked Devices) to login:');
-            console.log('=============================================================\n');
-            qrcode.generate(qr, { small: true });
-        });
-
-        this.client.on('ready', async () => {
-            console.log('WhatsApp Client is ready!');
-            // Small delay to ensure complete initialization
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            this.isReady = true;
-        });
-
-        this.client.on('authenticated', () => {
-            console.log('WhatsApp Authenticated!');
-        });
-
-        this.client.on('auth_failure', (msg) => {
-            console.error('WhatsApp Authentication Failure:', msg);
-            this.isReady = false;
-        });
-
-        this.client.on('disconnected', (reason) => {
-            console.warn('WhatsApp Disconnected:', reason);
-            this.isReady = false;
-            // Client usually destroys itself on disconnect, logic to re-init might be needed 
-            // but whatsapp-web.js often handles some reconnection or we just let the process restart if crucial
-            // For now, let's just log it. 
-        });
-
+        // Fetch version once — not on every reconnect
         try {
-            await this.client.initialize();
+            const { version } = await fetchLatestBaileysVersion();
+            this.waVersion = version;
+        } catch {
+            console.warn('Could not fetch latest Baileys version, using fallback.');
+            this.waVersion = [2, 3000, 1015901307] as [number, number, number];
+        }
 
-            // Wait for ready state with timeout
-            console.log('Waiting for WhatsApp to be ready (this may take up to 2 minutes)...');
-            const maxWaitTime = 120000; // 2 minutes
-            const startTime = Date.now();
-            let lastLogTime = startTime;
+        await this.connect();
+    }
 
-            while (!this.isReady && (Date.now() - startTime) < maxWaitTime) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+    private async connect(): Promise<void> {
+        // Tear down any existing socket and its listeners before creating a new one
+        if (this.sock) {
+            this.sock.ev.removeAllListeners();
+            try { this.sock.end(undefined); } catch {}
+            this.sock = null;
+        }
 
-                // Log progress every 15 seconds
-                const elapsed = Date.now() - lastLogTime;
-                if (elapsed >= 15000) {
-                    const totalElapsed = Math.floor((Date.now() - startTime) / 1000);
-                    console.log(`   Still waiting... (${totalElapsed}s elapsed)`);
-                    lastLogTime = Date.now();
+        const authDir = path.join(process.cwd(), 'data', 'baileys_auth');
+        const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+        this.sock = makeWASocket({
+            version: this.waVersion,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, undefined),
+            },
+            printQRInTerminal: true,
+            // Suppress noisy default logger
+            logger: Object.fromEntries(
+                ['trace','debug','info','warn','error','fatal','child'].map(k => [k, () => {}])
+            ) as any,
+            generateHighQualityLinkPreview: false,
+            syncFullHistory: false,
+        });
+
+        this.sock.ev.on('creds.update', saveCreds);
+
+        this.sock.ev.on('connection.update', ({ connection, lastDisconnect }: Partial<ConnectionState>) => {
+            if (connection === 'open') {
+                console.log('WhatsApp Client is ready!');
+                this.isReady = true;
+            } else if (connection === 'close') {
+                this.isReady = false;
+                const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+                const loggedOut = statusCode === DisconnectReason.loggedOut;
+
+                if (loggedOut) {
+                    console.error('WhatsApp logged out — delete data/baileys_auth and re-scan QR code.');
+                    this.shouldReconnect = false;
+                } else if (this.shouldReconnect) {
+                    console.warn(`WhatsApp disconnected (code=${statusCode}), reconnecting in 5s...`);
+                    this.reconnectTimer = setTimeout(() => this.connect(), 5000);
                 }
             }
-
-            if (!this.isReady) {
-                console.warn('WhatsApp client initialized but not ready after timeout');
-                console.warn('Messages will NOT be sent via WhatsApp');
-            } else {
-                console.log('WhatsApp is ready and will send notifications');
-            }
-        } catch (error) {
-            console.error('Failed to initialize WhatsApp client:', error);
-            // Don't throw - let the service continue without WhatsApp
-            this.client = null;
-            this.isReady = false;
-        }
+        });
     }
 
     async sendMessage(text: string): Promise<void> {
-        if (!config.enableWhatsApp || !this.client || !this.isReady) {
-            return;
-        }
+        if (!config.enableWhatsApp || !this.sock || !this.isReady) return;
 
         const to = config.whatsAppToNumber;
         if (!to) {
@@ -124,54 +96,18 @@ export class WhatsAppService {
             return;
         }
 
-        try {
-            // Ensure number is in correct format
-            let formattedTo = to.replace('+', '').replace(/\s/g, '');
-
-            // If it doesn't have a suffix, default to individual contact (@c.us)
-            // Groups always end in @g.us
-            if (!formattedTo.endsWith('@c.us') && !formattedTo.endsWith('@g.us')) {
-                formattedTo += '@c.us';
-            }
-
-            // Race against timeout to prevent blocking the poll cycle
-            const sendPromise = this.client.sendMessage(formattedTo, text);
-            const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('WhatsApp send timed out after 15s')), SEND_TIMEOUT_MS)
-            );
-
-            await Promise.race([sendPromise, timeoutPromise]);
-            console.log(`WhatsApp message sent to ${to}`);
-            this.consecutiveFailures = 0;
-        } catch (error) {
-            this.consecutiveFailures++;
-            console.error('Failed to send WhatsApp message:', error);
-
-            if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                console.warn(`WhatsApp failed ${this.consecutiveFailures} times in a row, restarting client...`);
-                await this.restart();
-            }
+        let jid = to.replace('+', '').replace(/\s/g, '');
+        if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@g.us')) {
+            jid += '@s.whatsapp.net';
         }
-    }
 
-    private async restart(): Promise<void> {
-        if (this.restarting) return;
-        this.restarting = true;
+        const sendPromise = this.sock.sendMessage(jid, { text });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('WhatsApp send timed out after 15s')), SEND_TIMEOUT_MS)
+        );
 
-        try {
-            this.isReady = false;
-            if (this.client) {
-                try { await this.client.destroy(); } catch {}
-            }
-            this.client = null;
-            this.consecutiveFailures = 0;
-
-            // Re-initialize after a brief pause
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            await this.initialize();
-        } finally {
-            this.restarting = false;
-        }
+        await Promise.race([sendPromise, timeoutPromise]);
+        console.log(`WhatsApp message sent to ${to}`);
     }
 
     isClientReady(): boolean {
@@ -179,15 +115,21 @@ export class WhatsAppService {
     }
 
     async destroy(): Promise<void> {
-        if (this.client) {
-            try {
-                await this.client.destroy();
-                console.log('WhatsApp client destroyed');
-            } catch (error) {
-                console.error('Error destroying WhatsApp client:', error);
-            }
-            this.client = null;
-            this.isReady = false;
+        this.shouldReconnect = false;
+
+        // Cancel any pending reconnect timer
+        if (this.reconnectTimer !== null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
+
+        if (this.sock) {
+            this.sock.ev.removeAllListeners();
+            try { this.sock.end(undefined); } catch {}
+            this.sock = null;
+        }
+
+        this.isReady = false;
+        console.log('WhatsApp client destroyed');
     }
 }
