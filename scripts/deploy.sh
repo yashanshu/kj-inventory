@@ -340,6 +340,7 @@ rollback() {
 cleanup() {
     log_info "Cleaning up old Docker images..."
     docker image prune -f > /dev/null 2>&1 || true
+    docker image prune -a -f > /dev/null 2>&1 || true
     log_success "Cleanup completed"
 }
 

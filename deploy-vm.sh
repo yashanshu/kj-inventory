@@ -477,6 +477,11 @@ sudo docker compose ps
 echo ""
 echo "Recent logs:"
 sudo docker compose logs --tail=10
+
+echo "Cleaning up old Docker images..."
+sudo docker image prune -f > /dev/null 2>&1 || true
+sudo docker image prune -a -f > /dev/null 2>&1 || true
+echo "Cleanup completed"
 EOF
 }
 
