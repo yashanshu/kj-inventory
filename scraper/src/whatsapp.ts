@@ -6,6 +6,7 @@ import makeWASocket, {
     type ConnectionState,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
+import P from 'pino';
 import path from 'path';
 import { config } from './config.js';
 
@@ -50,19 +51,16 @@ export class WhatsAppService {
         const authDir = path.join(process.cwd(), 'data', 'baileys_auth');
         const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
-        const noopLogger = Object.fromEntries(
-            ['trace','debug','info','warn','error','fatal','child'].map(k => [k, () => {}])
-        ) as any;
+        const silentLogger = P({ level: 'silent' });
 
         this.sock = makeWASocket({
             version: this.waVersion,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, noopLogger),
+                keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
             },
             printQRInTerminal: true,
-            // Suppress noisy default logger
-            logger: noopLogger,
+            logger: silentLogger,
             generateHighQualityLinkPreview: false,
             syncFullHistory: false,
         });

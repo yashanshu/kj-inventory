@@ -35,6 +35,9 @@ importers:
       node-telegram-bot-api:
         specifier: ^0.66.0
         version: 0.66.0(request@2.88.2)
+      pino:
+        specifier: ^9.14.0
+        version: 9.14.0
     devDependencies:
       '@types/fs-extra':
         specifier: ^11.0.4
